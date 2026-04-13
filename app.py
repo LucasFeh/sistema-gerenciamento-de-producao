@@ -1,9 +1,12 @@
 import os
 import re
 import shutil
+import json
+import queue
+import time
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory, stream_with_context
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -12,6 +15,39 @@ BASE_STORAGE_DIR = Path(os.getenv("EQUIPMENTS_ROOT", "D:/MICROCONTROLLER_DEV/Sis
 BASE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 equipment_runtime = {}
+event_subscribers = []
+
+
+def publish_production_event(event_name, payload):
+    message = f"event: {event_name}\ndata: {json.dumps(payload)}\n\n"
+    dead_queues = []
+
+    for subscriber_queue in event_subscribers:
+        try:
+            subscriber_queue.put_nowait(message)
+        except Exception:
+            dead_queues.append(subscriber_queue)
+
+    for dead_queue in dead_queues:
+        if dead_queue in event_subscribers:
+            event_subscribers.remove(dead_queue)
+
+
+def production_events_stream():
+    subscriber_queue = queue.Queue()
+    event_subscribers.append(subscriber_queue)
+
+    try:
+        yield "event: connected\ndata: {}\n\n"
+        while True:
+            try:
+                message = subscriber_queue.get(timeout=25)
+                yield message
+            except queue.Empty:
+                yield "event: ping\ndata: {}\n\n"
+    finally:
+        if subscriber_queue in event_subscribers:
+            event_subscribers.remove(subscriber_queue)
 
 
 def normalize_equipment_name(raw_name):
@@ -86,15 +122,23 @@ def ensure_runtime_state(equipment_name):
     if equipment_name not in equipment_runtime:
         equipment_runtime[equipment_name] = {
             "active": False,
+            "pending_fresa": False,
             "process": "Torno",
             "index": 0,
         }
     return equipment_runtime[equipment_name]
 
 
+def active_equipment_name():
+    for name, state in equipment_runtime.items():
+        if state.get("active") or state.get("pending_fresa"):
+            return name
+    return None
+
+
 def current_production_file(equipment_name):
     state = ensure_runtime_state(equipment_name)
-    if not state["active"]:
+    if not state["active"] or state.get("pending_fresa"):
         return None
 
     current_process = state["process"]
@@ -115,25 +159,28 @@ def current_production_file(equipment_name):
 def advance_production(equipment_name):
     state = ensure_runtime_state(equipment_name)
     if not state["active"]:
-        return False
+        return "not-active"
 
     state["index"] += 1
     process_files = list_process_pdfs(equipment_name, state["process"])
 
     if state["index"] < len(process_files):
-        return True
+        return "next"
 
     if state["process"] == "Torno":
-        state["process"] = "Fresa"
-        state["index"] = 0
         fresa_files = list_process_pdfs(equipment_name, "Fresa")
         if fresa_files:
-            return True
+            state["active"] = False
+            state["pending_fresa"] = True
+            state["process"] = "Fresa"
+            state["index"] = 0
+            return "awaiting-fresa"
 
     state["active"] = False
+    state["pending_fresa"] = False
     state["process"] = "Torno"
     state["index"] = 0
-    return False
+    return "finished"
 
 
 def equipment_snapshot(equipment_name):
@@ -148,9 +195,18 @@ def equipment_snapshot(equipment_name):
         "fresa_count": len(fresa_files),
         "torno_files": torno_files,
         "fresa_files": fresa_files,
-        "active": state["active"],
+        "active": state["active"] or state.get("pending_fresa", False),
+        "pending_fresa_confirmation": state.get("pending_fresa", False),
         "current": current_file,
     }
+
+
+def finalize_production_state(equipment_name):
+    state = ensure_runtime_state(equipment_name)
+    state["active"] = False
+    state["pending_fresa"] = False
+    state["process"] = "Torno"
+    state["index"] = 0
 
 
 @app.route("/")
@@ -158,14 +214,57 @@ def home():
     return render_template("index.html")
 
 
-@app.route("/producao/<equipment_name>")
-def production_page(equipment_name):
-    equipment_dir = BASE_STORAGE_DIR / equipment_name
-    if not equipment_dir.exists():
-        abort(404)
+@app.route("/producao")
+def production_page():
+    return render_template("producao.html")
 
-    snapshot = equipment_snapshot(equipment_name)
-    return render_template("producao.html", equipment=snapshot)
+
+@app.route("/api/eventos/producao", methods=["GET"])
+def production_events():
+    return Response(
+        stream_with_context(production_events_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.route("/api/producao/atual", methods=["GET"])
+def current_production_status():
+    current_active = active_equipment_name()
+    if not current_active:
+        return jsonify({"active": False, "equipment": None})
+
+    snapshot = equipment_snapshot(current_active)
+    if not snapshot["active"]:
+        return jsonify({"active": False, "equipment": None})
+
+    return jsonify({"active": True, "equipment": snapshot})
+
+
+@app.route("/api/producao/finalizar", methods=["POST"])
+def finish_current_active_production():
+    current_active = active_equipment_name()
+    if not current_active:
+        return jsonify({"error": "Nao existe producao em andamento."}), 400
+
+    result = advance_production(current_active)
+    publish_production_event(
+        "production-updated",
+        {
+            "equipmentName": current_active,
+            "result": result,
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+    if result in {"finished", "not-active"}:
+        return jsonify({"has_next": False, "active": False, "equipment": None, "result": result})
+
+    snapshot = equipment_snapshot(current_active)
+    return jsonify({"has_next": True, "active": snapshot["active"], "equipment": snapshot, "result": result})
 
 
 @app.route("/api/equipamentos", methods=["GET"])
@@ -229,15 +328,24 @@ def start_production(equipment_name):
     if not has_torno and not has_fresa:
         return jsonify({"error": "Nao ha PDFs para produzir."}), 400
 
-    state = ensure_runtime_state(equipment_name)
+    current_active = active_equipment_name()
+    if current_active and current_active != equipment_name:
+        return jsonify({"error": f"Ja existe producao em andamento para '{current_active}'. Finalize antes de iniciar outra."}), 409
+
+    current_state = ensure_runtime_state(equipment_name)
+    if current_state["active"]:
+        return jsonify({"error": "Este equipamento ja esta em producao."}), 409
+
+    state = current_state
     state["active"] = True
+    state["pending_fresa"] = False
     state["process"] = "Torno" if has_torno else "Fresa"
     state["index"] = 0
 
     return jsonify(
         {
             "message": "Producao iniciada.",
-            "redirect": f"/producao/{equipment_name}",
+            "redirect": "/producao",
             "equipment": equipment_snapshot(equipment_name),
         }
     )
@@ -249,14 +357,64 @@ def finish_current_piece(equipment_name):
     if not root.exists():
         return jsonify({"error": "Equipamento nao encontrado."}), 404
 
-    has_next = advance_production(equipment_name)
+    result = advance_production(equipment_name)
+    publish_production_event(
+        "production-updated",
+        {
+            "equipmentName": equipment_name,
+            "result": result,
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+    snapshot = equipment_snapshot(equipment_name)
     return jsonify(
         {
-            "has_next": has_next,
-            "equipment": equipment_snapshot(equipment_name),
-            "redirect": f"/producao/{equipment_name}" if has_next else "/",
+            "result": result,
+            "has_next": result in {"next", "awaiting-fresa"},
+            "equipment": snapshot,
+            "redirect": "/producao" if result in {"next", "awaiting-fresa"} else "/",
         }
     )
+
+
+@app.route("/api/equipamentos/<equipment_name>/decidir-fresa", methods=["POST"])
+def decide_fresa(equipment_name):
+    root = BASE_STORAGE_DIR / equipment_name
+    if not root.exists():
+        return jsonify({"error": "Equipamento nao encontrado."}), 404
+
+    state = ensure_runtime_state(equipment_name)
+    if not state.get("pending_fresa"):
+        return jsonify({"error": "Nao ha decisao pendente para Fresa."}), 400
+
+    proceed_raw = request.json.get("proceed") if request.is_json else request.form.get("proceed")
+    proceed = str(proceed_raw).lower() in {"1", "true", "sim", "yes"}
+
+    if proceed:
+        state["pending_fresa"] = False
+        state["active"] = True
+        state["process"] = "Fresa"
+        state["index"] = 0
+        publish_production_event(
+            "production-updated",
+            {
+                "equipmentName": equipment_name,
+                "result": "fresa-started",
+                "timestamp": int(time.time() * 1000),
+            },
+        )
+        return jsonify({"message": "Producao da Fresa iniciada.", "equipment": equipment_snapshot(equipment_name)})
+
+    finalize_production_state(equipment_name)
+    publish_production_event(
+        "production-updated",
+        {
+            "equipmentName": equipment_name,
+            "result": "finished-without-fresa",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+    return jsonify({"message": "Producao finalizada sem Fresa.", "equipment": equipment_snapshot(equipment_name)})
 
 
 @app.route("/arquivos/<equipment_name>/<process_name>/<filename>")
@@ -267,4 +425,4 @@ def serve_piece_file(equipment_name, process_name, filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

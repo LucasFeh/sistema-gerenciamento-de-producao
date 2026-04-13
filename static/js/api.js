@@ -66,3 +66,23 @@ export async function finishCurrentPiece(equipmentName) {
     method: "POST",
   });
 }
+
+export async function getCurrentProduction() {
+  return requestJson("/api/producao/atual");
+}
+
+export async function finishCurrentProduction() {
+  return requestJson("/api/producao/finalizar", {
+    method: "POST",
+  });
+}
+
+export async function decideFresa(equipmentName, proceed) {
+  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/decidir-fresa`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ proceed }),
+  });
+}

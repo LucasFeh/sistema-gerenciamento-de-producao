@@ -4,28 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
-    <title>Producao - {{ equipment.name }}</title>
+    <title>Visualizacao de Producao</title>
 </head>
-<body data-equipment-name="{{ equipment.name }}">
+<body>
     <div class="producao_Page">
-        <div class="producao_Box">
-            <h1>{{ equipment.name }}</h1>
-
-            {% if equipment.current %}
-                <p>Processo: <strong>{{ equipment.current.process }}</strong></p>
-                <p>Peca {{ equipment.current.index + 1 }} de {{ equipment.current.total }}</p>
-
-                <iframe
-                    class="pdf_Frame"
-                    src="{{ url_for('serve_piece_file', equipment_name=equipment.name, process_name=equipment.current.process, filename=equipment.current.filename) }}"
-                    title="Visualizador de PDF"
-                ></iframe>
-
-                <button id="btn-finalizar" class="btn_Finalizar">Finalizar</button>
-            {% else %}
-                <p>Nenhuma producao ativa para este equipamento.</p>
-                <a class="btn_Voltar" href="{{ url_for('home') }}">Voltar ao Painel</a>
-            {% endif %}
+        <div id="producao-container" class="producao_Box">
+            <h1>Aguardando producao</h1>
+            <p>Quando houver uma producao em andamento, o PDF atual aparecera aqui.</p>
         </div>
     </div>
 

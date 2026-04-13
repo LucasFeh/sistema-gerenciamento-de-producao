@@ -6,6 +6,7 @@
   --color-success: #148a41;
   --color-success-dark: #0f6b32;
   --color-gray-dot: #cfcfcf;
+  --color-current-dot: #1f78ff;
 }
 
 * {
@@ -153,10 +154,22 @@ body {
 }
 
 .list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   cursor: pointer;
   font-size: 12px;
   padding: 12px 10px;
   transition: background 0.2s;
+}
+
+.badge_Andamento {
+  background: var(--color-current-dot);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .list-item:hover {
@@ -198,6 +211,10 @@ body {
 
 .dot.done {
   background: var(--color-primary);
+}
+
+.dot.current {
+  background: var(--color-current-dot);
 }
 
 .btn_IniciarProducao {
@@ -414,41 +431,83 @@ body {
 
 .producao_Page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--color-bg);
+  height: 100vh;
+  display: block;
+  padding: 8px;
+  background: #000;
 }
 
 .producao_Box {
-  width: min(980px, 100%);
-  border: 1px solid var(--color-primary);
-  border-radius: 10px;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  padding: 24px;
+  width: 100%;
+  height: calc(100vh - 16px);
+  border: 1px solid #fff;
+  border-radius: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 .pdf_Frame {
   width: 100%;
-  height: 70vh;
-  border: 1px solid var(--color-primary);
-  border-radius: 8px;
-  background: #fff;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #fff;
+  border-radius: 0;
+  background: #000;
 }
 
-.btn_Finalizar,
-.btn_Voltar {
+.btn_Finalizar {
   display: inline-block;
-  margin-top: 12px;
-  background: var(--color-success);
-  color: #fff;
-  text-decoration: none;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 14px;
+  margin-top: 0;
+  background: #fff;
+  color: #000;
+  border: 1px solid #fff;
+  border-radius: 0;
+  padding: 8px 14px;
   cursor: pointer;
   font-weight: 700;
+}
+
+.producao_Header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px 10px;
+  color: #fff;
+}
+
+.producao_Header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.producao_Header p {
+  margin: 0;
+}
+
+.producao_Meta {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.producao_EmptyStage {
+  flex: 1;
+  border: 1px dashed #fff;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+  font-weight: 700;
+}
+
+.producao_Footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
 }
 
 @media (max-width: 900px) {
@@ -463,4 +522,89 @@ body {
     flex: none;
     width: 100%;
   }
+}
+
+.btn_IniciarProducao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.acoes_Producao {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.btn_FinalizarEtapa {
+  background: #fff;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn_AbrirVisualizacao {
+  background: #fff;
+  color: #0b57d0;
+  border: 1px solid #0b57d0;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.decision_Box {
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.decision_Box p {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+
+.btn_DecisionYes,
+.btn_DecisionNo {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.btn_DecisionYes {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.btn_DecisionNo {
+  background: #fff;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.viewer_Inline {
+  margin-top: 8px;
+  border: 1px solid var(--color-primary);
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.viewer_Title {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+
+.pdf_FrameInline {
+  width: 100%;
+  height: 360px;
+  border: 1px solid #bbb;
 }

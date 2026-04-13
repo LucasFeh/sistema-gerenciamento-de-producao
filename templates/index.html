@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <title>Sistema de Producao</title>
+</head>
+<body>
+    <div class="container_Principal">
+        <aside class="barra_Menu">
+            <button id="open-modal" class="btn_AddEquip">Novo Equipamento</button>
+
+            <div id="form-feedback" class="feedback"></div>
+
+            <ul id="equip-list" class="equip_List"></ul>
+        </aside>
+        
+        <main class="informacoes_Equipamentos">
+            <div id="equip-info" class="painel_Info">
+                <h1>Painel de Producao</h1>
+                <p>Selecione um equipamento para ver as informacoes e iniciar a producao.</p>
+            </div>
+        </main>
+    </div>
+
+    <div id="equipment-modal" class="modal_Overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal_Box">
+            <div class="modal_Header">
+                <button id="close-modal" class="btn_CloseModal" type="button">X</button>
+            </div>
+
+            <form id="equipment-form" class="form_Equipamento">
+                <label for="equipment-name">Nome do Equipamento</label>
+                <input id="equipment-name" name="name" type="text" required />
+
+                
+                <div class="tabs_Header">
+                    <button type="button" class="tab_Btn active" data-tab="torno">Torno</button>
+                    <button type="button" class="tab_Btn" data-tab="fresa">Fresa</button>
+                </div>
+                <div id="tab-torno" class="tab_Panel active">
+                    <div class="upload_Row">
+                        <span>Adicionar PDFs do Torno</span>
+                        <label for="torno-pdfs" class="upload_Plus" title="Adicionar PDF">+</label>
+                        <input id="torno-pdfs" name="torno_pdfs" type="file" accept="application/pdf" multiple class="hidden_FileInput" />
+                    </div>
+                    <div id="torno-preview" class="pdf_PreviewGrid"></div>
+                </div>
+
+                <div id="tab-fresa" class="tab_Panel">
+                    <div class="upload_Row">
+                        <span>Adicionar PDFs da Fresa</span>
+                        <label for="fresa-pdfs" class="upload_Plus" title="Adicionar PDF">+</label>
+                        <input id="fresa-pdfs" name="fresa_pdfs" type="file" accept="application/pdf" multiple class="hidden_FileInput" />
+                    </div>
+                    <div id="fresa-preview" class="pdf_PreviewGrid"></div>
+                </div>
+
+                <div class="modal_Actions">
+                    <button type="submit" class="btn_SubmitEquip">Salvar Equipamento</button>
+                    <button id="delete-equipment" type="button" class="btn_DeleteEquip">Apagar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="{{ url_for('static', filename='js/index-page.js') }}"></script>
+</body>
+</html>

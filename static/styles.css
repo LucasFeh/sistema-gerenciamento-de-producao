@@ -1,0 +1,466 @@
+:root {
+  --color-primary: #b30000;
+  --color-primary-light: #fff3f3;
+  --color-bg: #fff;
+  --color-text: #000000;
+  --color-success: #148a41;
+  --color-success-dark: #0f6b32;
+  --color-gray-dot: #cfcfcf;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.container_Principal {
+  display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.barra_Menu {
+  flex: 1 1 0;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+    padding: 32px 0;
+}
+
+.titulo_Menu {
+  margin: 0 0 16px;
+}
+
+.informacoes_Equipamentos {
+  background: var(--color-bg);
+  flex: 4 1 0;
+  display: flex;
+  flex-direction: column;
+    align-items: flex-start;
+  padding: 24px;
+}
+
+.painel_Info {
+  background: var(--color-primary-light);
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  padding: 32px;
+  min-width: 320px;
+  min-height: 180px;
+  color: var(--color-primary);
+  position: relative;
+}
+
+.btn_AddEquip{
+  background: #fff;
+  color: var(--color-primary);
+  border: none;
+  border-radius: 6px;
+  padding: 12px 20px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.btn_SubmitEquip {
+  margin-top: 8px;
+}
+.btn_SubmitEquip {
+  background: var(--color-success);
+  width: 200px;
+  height: 40px;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal_Actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn_DeleteEquip {
+  margin-top: 8px;
+  background: #fff;
+  width: 140px;
+  height: 40px;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn_DeleteEquip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form_Equipamento {
+  width: 90%;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form_Equipamento input[type="text"],
+.form_Equipamento input[type="file"] {
+  width: 100%;
+}
+
+.hidden {
+  display: none;
+}
+
+.feedback {
+  min-height: 24px;
+  width: 90%;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.feedback.error {
+  color: #ffd6d6;
+}
+
+.feedback.success {
+  color: #c2ffd2;
+}
+
+.equip_List {
+  list-style: none;
+  padding: 0;
+    width: 100%;
+}
+
+.list-item {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 12px 10px;
+  transition: background 0.2s;
+}
+
+.list-item:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.barra_Progresso_Group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  background-color: var(--color-primary);
+  border: 3px solid var(--color-text);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.barra_Progresso_Group p{
+    justify-self: start;
+    background-color: var(--color-primary);
+    width: 15%;
+    color: #fff;
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.barra_Bolinhas {
+  display: flex;
+  gap: 25px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-gray-dot);
+}
+
+.dot.done {
+  background: var(--color-primary);
+}
+
+.btn_IniciarProducao {
+  background: var(--color-success);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn_Engrenagem {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-primary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.btn_Engrenagem:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn_IniciarProducao:hover {
+  background: var(--color-success-dark);
+}
+
+.modal_Overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  display: grid;
+  place-items: center;
+  z-index: 999;
+  padding: 18px;
+}
+
+.modal_Overlay.hidden {
+  display: none;
+}
+
+.modal_Box {
+  width: min(940px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 0;
+  border: 1px solid var(--color-primary);
+  background: #efefef;
+  padding: 18px;
+}
+
+.modal_Header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: var(--color-primary);
+}
+
+.btn_CloseModal {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  color: #fff;
+  border-radius: 0;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+}
+
+.tabs_Header {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tab_Btn {
+  border: 1px solid var(--color-text);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 0;
+  padding: 4px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab_Btn.active {
+  background: #8f0000;
+  color: var(--color-primary-light);
+}
+
+.tab_Panel {
+  display: none;
+  margin-top: 6px;
+  border: 1px solid #333;
+  border-radius: 0;
+  padding: 12px;
+  min-height: 300px;
+  background: #efefef;
+}
+
+.tab_Panel.active {
+  display: block;
+}
+
+.upload_Row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: #111;
+}
+
+.upload_Plus {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-primary);
+  background: #fff;
+  color: var(--color-primary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hidden_FileInput {
+  display: none;
+}
+
+.list_Box {
+  border: 1px solid #666;
+  background: #fff;
+  padding: 8px;
+}
+
+.pdf_PreviewGrid {
+  margin-top: 12px;
+  min-height: 220px;
+  border: 1px solid #666;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.pdf_Card {
+  border: 1px solid #9d9d9d;
+  background: #f8f8f8;
+  min-height: 100px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pdf_Card.selected {
+  border-color: var(--color-success);
+  background: #f1fff6;
+}
+
+.pdf_Tag {
+  display: inline-block;
+  width: fit-content;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #444;
+  padding: 2px 6px;
+  background: #fff;
+}
+
+.pdf_Card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.pdf_RemoveBtn {
+  align-self: flex-end;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-primary);
+  background: #fff;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.pdf_EmptyBox {
+  border: 1px dashed #999;
+  min-height: 80px;
+  display: grid;
+  place-items: center;
+  color: #666;
+  font-size: 13px;
+}
+
+.producao_Page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-bg);
+}
+
+.producao_Box {
+  width: min(980px, 100%);
+  border: 1px solid var(--color-primary);
+  border-radius: 10px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  padding: 24px;
+}
+
+.pdf_Frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.btn_Finalizar,
+.btn_Voltar {
+  display: inline-block;
+  margin-top: 12px;
+  background: var(--color-success);
+  color: #fff;
+  text-decoration: none;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .container_Principal {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .barra_Menu,
+  .informacoes_Equipamentos {
+    flex: none;
+    width: 100%;
+  }
+}

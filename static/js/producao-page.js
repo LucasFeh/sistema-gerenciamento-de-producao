@@ -67,7 +67,8 @@ function renderActiveState(data) {
     isFinishing = true;
     try {
       const payload = await finishCurrentProduction();
-      notifyManagement(data.name);
+      const reportEquipment = payload.equipmentName || data.name;
+      notifyManagement(reportEquipment);
       if (!payload.active || !payload.equipment || !payload.equipment.current) {
         renderKey = "waiting";
         renderWaitingState();

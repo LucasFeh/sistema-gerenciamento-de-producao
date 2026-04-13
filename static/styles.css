@@ -246,6 +246,7 @@ body {
 }
 
 .btn_IniciarProducao,
+.btn_BaixarRelatorio,
 .btn_FinalizarEtapa,
 .btn_AbrirVisualizacao,
 .btn_DecisionYes,
@@ -281,6 +282,18 @@ body {
   border: 1px solid #d8bcc4;
   background: #fff;
   color: var(--primary);
+}
+
+.btn_BaixarRelatorio {
+  border: 1px solid #bfc8da;
+  background: #f4f7ff;
+  color: #1d3f8f;
+}
+
+.btn_BaixarRelatorio:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn_AbrirVisualizacao {
@@ -323,6 +336,82 @@ body {
   color: #5b4750;
   font-size: 13px;
   font-family: "JetBrains Mono", monospace;
+}
+
+.timer_Box {
+  margin-top: 12px;
+  border: 1px solid #e8d5dc;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.timer_Box p {
+  margin: 0;
+  font-size: 13px;
+  color: #4e3a41;
+}
+
+.history_Box {
+  margin-top: 10px;
+  border: 1px solid #e8d5dc;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.history_Box > p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4e2934;
+}
+
+.history_HeaderRow {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.9fr;
+  gap: 10px;
+  padding: 0 0 7px;
+  border-bottom: 1px solid #ecd9df;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5a2a36;
+}
+
+.history_List {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history_Item {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr 1fr 0.9fr;
+  gap: 10px;
+  font-size: 12px;
+  color: #5e4b52;
+  border-bottom: 1px dashed #efdee3;
+  padding-bottom: 6px;
+}
+
+.history_CellName {
+  font-weight: 700;
+  color: #4d2330;
+}
+
+.history_Item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.history_Empty {
+  margin: 0;
+  font-size: 12px;
+  color: #7b6a70;
 }
 
 .modal_Overlay {

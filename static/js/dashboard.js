@@ -1,4 +1,6 @@
-import { decideFresa, finishCurrentPiece, getEquipmentDetail, listEquipments, startProduction } from "./api.js";
+import { decideFresa, finishCurrentPiece, getEquipmentDetail, listEquipments, resetProductionTracking, startProduction } from "./api.js";
+
+let pieceTimerInterval = null;
 
 function renderProgressDots(total, doneCount, currentIndex) {
   const safeTotal = Math.max(total, 1);
@@ -22,15 +24,92 @@ function productionPageUrl() {
   return "/producao";
 }
 
+function formatDuration(durationMs) {
+  const totalSeconds = Math.floor((durationMs || 0) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatClock(timestampMs) {
+  if (!timestampMs) {
+    return "--:--:--";
+  }
+  const date = new Date(timestampMs);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+}
+
+function canDownloadReport(data) {
+  if (!data) {
+    return false;
+  }
+
+  const ended = !data.active && !data.pending_fresa_confirmation;
+  const hasHistory = (data.piece_history || []).length > 0;
+  return ended && hasHistory;
+}
+
+function renderPieceHistory(history) {
+  if (!history || history.length === 0) {
+    return '<p class="history_Empty">Nenhuma peca finalizada ainda.</p>';
+  }
+
+  return history
+    .map((entry) => {
+      return `
+        <li class="history_Item">
+          <span class="history_CellName">${entry.piece_name || "-"}</span>
+          <span>${entry.process || "-"}</span>
+          <span>${formatClock(entry.started_at_ms)}</span>
+          <span>${formatClock(entry.ended_at_ms)}</span>
+          <span>${formatDuration(entry.duration_ms)}</span>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function bindCurrentPieceTimer(startedAtMs) {
+  if (pieceTimerInterval) {
+    clearInterval(pieceTimerInterval);
+    pieceTimerInterval = null;
+  }
+
+  if (!startedAtMs) {
+    return;
+  }
+
+  const timerElement = document.getElementById("current-piece-timer");
+  if (!timerElement) {
+    return;
+  }
+
+  const update = () => {
+    const elapsed = Date.now() - startedAtMs;
+    timerElement.textContent = formatDuration(elapsed);
+  };
+
+  update();
+  pieceTimerInterval = window.setInterval(update, 1000);
+}
+
 function buildProcessState(data, processName, totalCount) {
+  const history = data.piece_history || [];
+  const completedCount = history.filter((entry) => entry.process === processName).length;
+
   if (!data.current || !data.active || data.current.process !== processName) {
-    return { doneCount: 0, currentIndex: null };
+    return { doneCount: Math.min(completedCount, totalCount), currentIndex: null };
   }
 
   const rawIndex = data.current.index;
   const safeIndex = Math.max(0, Math.min(rawIndex, Math.max(totalCount - 1, 0)));
   return {
-    doneCount: safeIndex,
+    doneCount: Math.min(completedCount, safeIndex),
     currentIndex: safeIndex,
   };
 }
@@ -40,6 +119,8 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
   const tornoState = buildProcessState(data, "Torno", data.torno_count);
   const fresaState = buildProcessState(data, "Fresa", data.fresa_count);
   const viewUrl = productionPageUrl();
+  const currentStart = data.current ? data.current.started_at_ms : null;
+  const reportEnabled = canDownloadReport(data);
 
   panel.innerHTML = `
     <button id="edit-pdfs" class="btn_Engrenagem" title="Editar PDFs" aria-label="Editar PDFs">&#9881;</button>
@@ -58,6 +139,7 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
 
     <div class="acoes_Producao">
       <button id="start-production" class="btn_IniciarProducao" ${data.active ? "disabled" : ""}>Iniciar Producao</button>
+      <button id="download-report" class="btn_BaixarRelatorio" ${reportEnabled ? "" : "disabled"}>Baixar relatorio</button>
       ${data.active ? '<button id="finish-step" class="btn_FinalizarEtapa">Finalizar Etapa Atual</button>' : ""}
       ${data.active && data.current ? `<a class="btn_AbrirVisualizacao" href="${viewUrl}" target="_blank" rel="noopener">Abrir Visualizacao</a>` : ""}
     </div>
@@ -71,7 +153,27 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
     ` : ""}
 
     ${data.active && data.current ? `<p class="viewer_Title">Em visualizacao: ${data.current.process} - ${data.current.filename}</p>` : ""}
+
+    <div class="timer_Box">
+      <p>Timer da peca atual: <strong id="current-piece-timer">${currentStart ? formatDuration(Date.now() - currentStart) : "--:--"}</strong></p>
+    </div>
+
+    <div class="history_Box">
+      <p>Historico de pecas finalizadas</p>
+      <div class="history_HeaderRow">
+        <span>Nome</span>
+        <span>Tipo</span>
+        <span>Hora de inicio</span>
+        <span>Hora de termino</span>
+        <span>Tempo de producao</span>
+      </div>
+      <ul class="history_List">
+        ${renderPieceHistory(data.piece_history || [])}
+      </ul>
+    </div>
   `;
+
+  bindCurrentPieceTimer(currentStart);
 
   document.getElementById("start-production").onclick = async function () {
     try {
@@ -85,6 +187,23 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
     }
   };
 
+  document.getElementById("download-report").onclick = async function () {
+    if (!reportEnabled) {
+      return;
+    }
+
+    window.open(`/api/equipamentos/${encodeURIComponent(data.name)}/relatorio`, "_blank", "noopener");
+
+    try {
+      await resetProductionTracking(data.name);
+      if (onStateChanged) {
+        await onStateChanged(data.name);
+      }
+    } catch (error) {
+      alert(error.message || "Erro ao zerar historico apos relatorio.");
+    }
+  };
+
   if (data.active) {
     document.getElementById("finish-step").onclick = async function () {
       try {
@@ -92,7 +211,7 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
         const updated = payload.equipment;
         renderEquipmentInfo(updated, onEditPdfs, onStateChanged);
         if (onStateChanged) {
-          await onStateChanged(updated.name);
+          await onStateChanged((updated && updated.name) || data.name);
         }
       } catch (error) {
         alert(error.message || "Erro ao finalizar etapa.");

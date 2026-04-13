@@ -4,6 +4,7 @@ import shutil
 import json
 import queue
 import time
+import io
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory, stream_with_context
@@ -125,6 +126,8 @@ def ensure_runtime_state(equipment_name):
             "pending_fresa": False,
             "process": "Torno",
             "index": 0,
+            "piece_started_at_ms": None,
+            "piece_history": [],
         }
     return equipment_runtime[equipment_name]
 
@@ -153,6 +156,7 @@ def current_production_file(equipment_name):
         "filename": current_files[current_index],
         "index": current_index,
         "total": len(current_files),
+        "started_at_ms": state.get("piece_started_at_ms"),
     }
 
 
@@ -161,10 +165,31 @@ def advance_production(equipment_name):
     if not state["active"]:
         return "not-active"
 
+    now_ms = int(time.time() * 1000)
+    current_process = state["process"]
+    current_index = state["index"]
+    current_files = list_process_pdfs(equipment_name, current_process)
+
+    if current_index < len(current_files):
+        current_filename = current_files[current_index]
+        start_ms = state.get("piece_started_at_ms") or now_ms
+        duration_ms = max(0, now_ms - start_ms)
+        state["piece_history"].append(
+            {
+                "process": current_process,
+                "piece_name": Path(current_filename).stem,
+                "filename": current_filename,
+                "started_at_ms": start_ms,
+                "ended_at_ms": now_ms,
+                "duration_ms": duration_ms,
+            }
+        )
+
     state["index"] += 1
     process_files = list_process_pdfs(equipment_name, state["process"])
 
     if state["index"] < len(process_files):
+        state["piece_started_at_ms"] = int(time.time() * 1000)
         return "next"
 
     if state["process"] == "Torno":
@@ -174,12 +199,14 @@ def advance_production(equipment_name):
             state["pending_fresa"] = True
             state["process"] = "Fresa"
             state["index"] = 0
+            state["piece_started_at_ms"] = None
             return "awaiting-fresa"
 
     state["active"] = False
     state["pending_fresa"] = False
     state["process"] = "Torno"
     state["index"] = 0
+    state["piece_started_at_ms"] = None
     return "finished"
 
 
@@ -198,7 +225,93 @@ def equipment_snapshot(equipment_name):
         "active": state["active"] or state.get("pending_fresa", False),
         "pending_fresa_confirmation": state.get("pending_fresa", False),
         "current": current_file,
+        "piece_history": state.get("piece_history", []),
     }
+
+
+def pdf_escape(text):
+    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def build_simple_pdf(lines):
+    content_lines = ["BT", "/F1 12 Tf", "14 TL", "40 800 Td"]
+
+    for line in lines:
+        content_lines.append(f"({pdf_escape(line)}) Tj")
+        content_lines.append("T*")
+
+    content_lines.append("ET")
+    content_stream = "\n".join(content_lines).encode("latin-1", errors="replace")
+
+    objects = []
+    objects.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+    objects.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+    objects.append(
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n"
+    )
+    objects.append(
+        b"4 0 obj\n<< /Length " + str(len(content_stream)).encode("ascii") + b" >>\nstream\n" + content_stream + b"\nendstream\nendobj\n"
+    )
+    objects.append(b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+
+    pdf = io.BytesIO()
+    pdf.write(b"%PDF-1.4\n")
+
+    offsets = [0]
+    for obj in objects:
+        offsets.append(pdf.tell())
+        pdf.write(obj)
+
+    xref_pos = pdf.tell()
+    pdf.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.write(b"0000000000 65535 f \n")
+
+    for offset in offsets[1:]:
+        pdf.write(f"{offset:010} 00000 n \n".encode("ascii"))
+
+    pdf.write(
+        (
+            "trailer\n"
+            f"<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+            "startxref\n"
+            f"{xref_pos}\n"
+            "%%EOF"
+        ).encode("ascii")
+    )
+
+    return pdf.getvalue()
+
+
+def report_lines_for_equipment(equipment_name):
+    snapshot = equipment_snapshot(equipment_name)
+    history = snapshot.get("piece_history", [])
+
+    lines = []
+    lines.append("Relatorio de Producao")
+    lines.append("")
+    lines.append(f"Equipamento: {equipment_name}")
+    lines.append(f"Total de pecas finalizadas: {len(history)}")
+    lines.append(f"Pecas Torno: {len([h for h in history if h.get('process') == 'Torno'])}")
+    lines.append(f"Pecas Fresa: {len([h for h in history if h.get('process') == 'Fresa'])}")
+    lines.append("")
+    lines.append("Historico por peca:")
+
+    if not history:
+        lines.append("- Nenhuma peca finalizada.")
+        return lines
+
+    for entry in history:
+        started = time.strftime("%H:%M:%S", time.localtime((entry.get("started_at_ms") or 0) / 1000))
+        ended = time.strftime("%H:%M:%S", time.localtime((entry.get("ended_at_ms") or 0) / 1000))
+        duration_total = max(0, int((entry.get("duration_ms") or 0) / 1000))
+        duration_min = duration_total // 60
+        duration_sec = duration_total % 60
+        duration_str = f"{duration_min:02}:{duration_sec:02}"
+        lines.append(
+            f"- {entry.get('piece_name', 'Peca')}: comecou {started} | terminou {ended} | tempo {duration_str}"
+        )
+
+    return lines
 
 
 def finalize_production_state(equipment_name):
@@ -207,6 +320,17 @@ def finalize_production_state(equipment_name):
     state["pending_fresa"] = False
     state["process"] = "Torno"
     state["index"] = 0
+    state["piece_started_at_ms"] = None
+
+
+def reset_equipment_tracking(equipment_name):
+    state = ensure_runtime_state(equipment_name)
+    state["active"] = False
+    state["pending_fresa"] = False
+    state["process"] = "Torno"
+    state["index"] = 0
+    state["piece_started_at_ms"] = None
+    state["piece_history"] = []
 
 
 @app.route("/")
@@ -252,6 +376,8 @@ def finish_current_active_production():
         return jsonify({"error": "Nao existe producao em andamento."}), 400
 
     result = advance_production(current_active)
+    snapshot = equipment_snapshot(current_active)
+    should_offer_report = result == "finished" and len(snapshot.get("piece_history", [])) > 0
     publish_production_event(
         "production-updated",
         {
@@ -261,10 +387,27 @@ def finish_current_active_production():
         },
     )
     if result in {"finished", "not-active"}:
-        return jsonify({"has_next": False, "active": False, "equipment": None, "result": result})
+        return jsonify(
+            {
+                "has_next": False,
+                "active": False,
+                "equipment": None,
+                "equipmentName": current_active,
+                "result": result,
+                "should_offer_report": should_offer_report,
+            }
+        )
 
-    snapshot = equipment_snapshot(current_active)
-    return jsonify({"has_next": True, "active": snapshot["active"], "equipment": snapshot, "result": result})
+    return jsonify(
+        {
+            "has_next": True,
+            "active": snapshot["active"],
+            "equipment": snapshot,
+            "equipmentName": current_active,
+            "result": result,
+            "should_offer_report": should_offer_report,
+        }
+    )
 
 
 @app.route("/api/equipamentos", methods=["GET"])
@@ -341,6 +484,8 @@ def start_production(equipment_name):
     state["pending_fresa"] = False
     state["process"] = "Torno" if has_torno else "Fresa"
     state["index"] = 0
+    state["piece_started_at_ms"] = int(time.time() * 1000)
+    state["piece_history"] = []
 
     return jsonify(
         {
@@ -367,12 +512,14 @@ def finish_current_piece(equipment_name):
         },
     )
     snapshot = equipment_snapshot(equipment_name)
+    should_offer_report = result == "finished" and len(snapshot.get("piece_history", [])) > 0
     return jsonify(
         {
             "result": result,
             "has_next": result in {"next", "awaiting-fresa"},
             "equipment": snapshot,
             "redirect": "/producao" if result in {"next", "awaiting-fresa"} else "/",
+            "should_offer_report": should_offer_report,
         }
     )
 
@@ -395,6 +542,7 @@ def decide_fresa(equipment_name):
         state["active"] = True
         state["process"] = "Fresa"
         state["index"] = 0
+        state["piece_started_at_ms"] = int(time.time() * 1000)
         publish_production_event(
             "production-updated",
             {
@@ -406,6 +554,7 @@ def decide_fresa(equipment_name):
         return jsonify({"message": "Producao da Fresa iniciada.", "equipment": equipment_snapshot(equipment_name)})
 
     finalize_production_state(equipment_name)
+    snapshot = equipment_snapshot(equipment_name)
     publish_production_event(
         "production-updated",
         {
@@ -414,7 +563,50 @@ def decide_fresa(equipment_name):
             "timestamp": int(time.time() * 1000),
         },
     )
-    return jsonify({"message": "Producao finalizada sem Fresa.", "equipment": equipment_snapshot(equipment_name)})
+    return jsonify(
+        {
+            "message": "Producao finalizada sem Fresa.",
+            "equipment": snapshot,
+            "should_offer_report": len(snapshot.get("piece_history", [])) > 0,
+        }
+    )
+
+
+@app.route("/api/equipamentos/<equipment_name>/relatorio", methods=["GET"])
+def download_equipment_report(equipment_name):
+    root = BASE_STORAGE_DIR / equipment_name
+    if not root.exists() or not root.is_dir():
+        return jsonify({"error": "Equipamento nao encontrado."}), 404
+
+    lines = report_lines_for_equipment(equipment_name)
+    pdf_content = build_simple_pdf(lines)
+
+    return Response(
+        pdf_content,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=relatorio_{secure_filename(equipment_name)}.pdf",
+        },
+    )
+
+
+@app.route("/api/equipamentos/<equipment_name>/reset-producao", methods=["POST"])
+def reset_equipment_production(equipment_name):
+    root = BASE_STORAGE_DIR / equipment_name
+    if not root.exists() or not root.is_dir():
+        return jsonify({"error": "Equipamento nao encontrado."}), 404
+
+    reset_equipment_tracking(equipment_name)
+    publish_production_event(
+        "production-updated",
+        {
+            "equipmentName": equipment_name,
+            "result": "tracking-reset",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
+    return jsonify({"message": "Sinalizacao e historico zerados.", "equipment": equipment_snapshot(equipment_name)})
 
 
 @app.route("/arquivos/<equipment_name>/<process_name>/<filename>")

@@ -86,3 +86,9 @@ export async function decideFresa(equipmentName, proceed) {
     body: JSON.stringify({ proceed }),
   });
 }
+
+export async function resetProductionTracking(equipmentName) {
+  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/reset-producao`, {
+    method: "POST",
+  });
+}

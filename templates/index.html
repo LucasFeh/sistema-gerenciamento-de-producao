@@ -3,16 +3,25 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <title>Sistema de Producao</title>
 </head>
 <body>
     <div class="container_Principal">
         <aside class="barra_Menu">
+            <div class="menu_Brand">
+                <h2>Sistema Mecanica</h2>
+                <p>Gestao de Torno e Fresa</p>
+            </div>
+
             <button id="open-modal" class="btn_AddEquip">Novo Equipamento</button>
 
             <div id="form-feedback" class="feedback"></div>
 
+            <p class="menu_SectionTitle">Equipamentos</p>
             <ul id="equip-list" class="equip_List"></ul>
         </aside>
         
@@ -27,6 +36,10 @@
     <div id="equipment-modal" class="modal_Overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal_Box">
             <div class="modal_Header">
+                <div>
+                    <h2 id="modal-title">Configurar Equipamento</h2>
+                    <p>Cadastre, atualize e organize os PDFs de processo.</p>
+                </div>
                 <button id="close-modal" class="btn_CloseModal" type="button">X</button>
             </div>
 

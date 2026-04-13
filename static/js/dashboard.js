@@ -192,9 +192,23 @@ export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
       return;
     }
 
-    window.open(`/api/equipamentos/${encodeURIComponent(data.name)}/relatorio`, "_blank", "noopener");
-
     try {
+      const reportUrl = `/api/equipamentos/${encodeURIComponent(data.name)}/relatorio`;
+      const response = await fetch(reportUrl);
+      if (!response.ok) {
+        throw new Error("Erro ao baixar relatorio.");
+      }
+
+      const reportBlob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(reportBlob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = objectUrl;
+      downloadLink.download = `relatorio_${data.name}.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      window.URL.revokeObjectURL(objectUrl);
+
       await resetProductionTracking(data.name);
       if (onStateChanged) {
         await onStateChanged(data.name);

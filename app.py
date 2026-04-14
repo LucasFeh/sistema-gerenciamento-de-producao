@@ -362,6 +362,11 @@ def apply_screen_queue_updates(slot_id, added_files, removed_files):
         if state.get("active") and state.get("piece_started_at_ms") is None and current_index < len(queue):
             state["piece_started_at_ms"] = int(time.time() * 1000)
 
+        # If production was finished and new pieces are added, continue automatically.
+        if (not state.get("active")) and added_files and current_index < len(queue):
+            state["active"] = True
+            state["piece_started_at_ms"] = int(time.time() * 1000)
+
 
 def current_screen_piece(slot_id):
     state = ensure_screen_runtime(slot_id)

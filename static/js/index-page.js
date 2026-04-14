@@ -5,6 +5,8 @@ import { createModalController } from "./modal.js";
 let selectedScreenId = 1;
 let isRefreshing = false;
 let modalController = null;
+const MANAGEMENT_SYNC_KEY = "screen-production-updated";
+const MANAGEMENT_SYNC_CHANNEL = "screen-production-sync";
 
 function renderDefaultPanel() {
   const panel = document.getElementById("equip-info");
@@ -68,6 +70,49 @@ async function refreshAll() {
   }
 }
 
+function subscribeToVisualizationUpdates() {
+  const handlePayload = async (payload) => {
+    if (!payload || payload.type !== "piece-finished") {
+      return;
+    }
+
+    await refreshAll();
+  };
+
+  if ("BroadcastChannel" in window) {
+    const channel = new BroadcastChannel(MANAGEMENT_SYNC_CHANNEL);
+    channel.onmessage = async function (event) {
+      await handlePayload(event.data || {});
+    };
+  }
+
+  window.addEventListener("storage", async function (event) {
+    if (event.key !== MANAGEMENT_SYNC_KEY) {
+      return;
+    }
+
+    let payload = {};
+    try {
+      payload = JSON.parse(event.newValue || "{}");
+    } catch (error) {
+      payload = {};
+    }
+
+    await handlePayload(payload);
+  });
+}
+
+function subscribeToBackendProductionEvents() {
+  if (!("EventSource" in window)) {
+    return;
+  }
+
+  const source = new EventSource("/api/eventos/producao");
+  source.addEventListener("production-updated", async function () {
+    await refreshAll();
+  });
+}
+
 refreshAll();
 
 modalController = createModalController(
@@ -79,3 +124,6 @@ modalController = createModalController(
     renderDetail(detail);
   }
 );
+
+subscribeToVisualizationUpdates();
+subscribeToBackendProductionEvents();

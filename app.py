@@ -854,6 +854,15 @@ def start_screen(slot_id):
     if status == "already-active":
         return jsonify({"error": "Esta tela ja esta em producao."}), 409
 
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": "started",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
     return jsonify({"message": "Producao iniciada.", "screen": screen_snapshot(slot_id)})
 
 
@@ -863,6 +872,15 @@ def finish_screen_piece(slot_id):
         return jsonify({"error": "Tela nao encontrada."}), 404
 
     result = advance_screen_production(slot_id)
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": result,
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
     return jsonify(
         {
             "result": result,

@@ -3,8 +3,26 @@ import { finishScreenPiece, getScreenDetail } from "./api.js";
 const container = document.getElementById("producao-container");
 const body = document.body;
 const screenId = Number(body.dataset.screenId || 1);
+const MANAGEMENT_SYNC_KEY = "screen-production-updated";
+const MANAGEMENT_SYNC_CHANNEL = "screen-production-sync";
 let renderKey = "";
 let isFinishing = false;
+
+function notifyManagementScreen(updatedScreenId) {
+  const payload = {
+    type: "piece-finished",
+    screenId: Number(updatedScreenId || screenId),
+    timestamp: Date.now(),
+  };
+
+  if ("BroadcastChannel" in window) {
+    const channel = new BroadcastChannel(MANAGEMENT_SYNC_CHANNEL);
+    channel.postMessage(payload);
+    channel.close();
+  }
+
+  localStorage.setItem(MANAGEMENT_SYNC_KEY, JSON.stringify(payload));
+}
 
 function buildPdfUrl(filename) {
   return `/arquivos/telas/${encodeURIComponent(screenId)}/${encodeURIComponent(filename)}`;
@@ -60,6 +78,7 @@ function renderActiveState(screen) {
     isFinishing = true;
     try {
       await finishScreenPiece(screen.id);
+      notifyManagementScreen(screen.id);
       await refreshViewer();
     } catch (error) {
       alert(error.message || "Erro ao finalizar etapa.");

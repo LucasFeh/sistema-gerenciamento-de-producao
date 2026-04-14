@@ -1,4 +1,4 @@
-import { finishScreenPiece, getScreenDetail } from "./api.js";
+import { finishScreenPiece, getScreenDetail, toggleScreenPause } from "./api.js";
 
 const container = document.getElementById("producao-container");
 const body = document.body;
@@ -7,6 +7,44 @@ const MANAGEMENT_SYNC_KEY = "screen-production-updated";
 const MANAGEMENT_SYNC_CHANNEL = "screen-production-sync";
 let renderKey = "";
 let isFinishing = false;
+let elapsedTimerInterval = null;
+
+function formatDuration(durationMs) {
+  const totalSeconds = Math.floor(Math.max(0, Number(durationMs || 0)) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function bindElapsedTimer(initialElapsedMs, paused) {
+  if (elapsedTimerInterval) {
+    clearInterval(elapsedTimerInterval);
+    elapsedTimerInterval = null;
+  }
+
+  const elapsedElement = document.getElementById("current-elapsed-display");
+  if (!elapsedElement) {
+    return;
+  }
+
+  const baseElapsed = Math.max(0, Number(initialElapsedMs || 0));
+  elapsedElement.textContent = formatDuration(baseElapsed);
+
+  if (paused) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  const updateElapsed = () => {
+    const delta = Date.now() - startedAt;
+    elapsedElement.textContent = formatDuration(baseElapsed + delta);
+  };
+
+  updateElapsed();
+  elapsedTimerInterval = window.setInterval(updateElapsed, 1000);
+}
 
 function notifyManagementScreen(updatedScreenId) {
   const payload = {
@@ -51,13 +89,48 @@ function renderFinishedState(screen) {
 function renderActiveState(screen) {
   const current = screen.current;
   const pieceTitle = (current.piece_name || current.filename || "Peca").replace(/\.pdf$/i, "");
+  const elapsedMs = Number(current.elapsed_ms || 0);
+
+  if (current.paused) {
+    container.innerHTML = `
+      <div class="producao_Header">
+        <h1>${screen.responsible || "Responsavel nao informado"}</h1>
+        <div class="producao_Meta">
+          <p>Peca em andamento: <strong>${pieceTitle}</strong></p>
+          <p>Tempo atual: <strong id="current-elapsed-display">${formatDuration(elapsedMs)}</strong></p>
+          <p>Paginacao: <strong>${current.index + 1} de ${current.total}</strong></p>
+        </div>
+      </div>
+
+      <div class="producao_EmptyStage">
+        <div class="paused_CenterBox">
+          <h2>PAUSADO</h2>
+          <button id="btn-toggle-pause" class="btn_Finalizar btn_Resume">Retomar</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("btn-toggle-pause").onclick = async function () {
+      try {
+        await toggleScreenPause(screen.id);
+        notifyManagementScreen(screen.id);
+        await refreshViewer();
+      } catch (error) {
+        alert(error.message || "Erro ao retomar operacao.");
+      }
+    };
+
+    bindElapsedTimer(elapsedMs, true);
+    return;
+  }
 
   container.innerHTML = `
     <div class="producao_Header">
       <h1>${pieceTitle}</h1>
       <div class="producao_Meta">
-        <p>Quantidade de pecas: <strong>${current.quantity || 1}</strong></p>
-        <p>Nome do responsavel pela producao: <strong>${screen.responsible || "Nao informado"}</strong></p>
+        <p>Tempo atual: <strong id="current-elapsed-display">${formatDuration(elapsedMs)}</strong></p>
+        <p>Quantidade: <strong>${current.quantity || 1}</strong></p>
+        <p>Responsavel: <strong>${screen.responsible || "Nao informado"}</strong></p>
         <p>Tipo de operacao: <strong>${screen.operation_type || "Nao informado"}</strong></p>
         <p>Paginacao: <strong>${current.index + 1} de ${current.total}</strong></p>
       </div>
@@ -66,9 +139,20 @@ function renderActiveState(screen) {
     <iframe class="pdf_Frame" src="${buildPdfUrl(current.filename)}" title="Visualizador de PDF"></iframe>
 
     <div class="producao_Footer">
-      <button id="btn-finalizar" class="btn_Finalizar">Finalizar</button>
+      <button id="btn-toggle-pause" class="btn_Finalizar btn_Pause">Pausar</button>
+      <button id="btn-finalizar" class="btn_Finalizar btn_Finish">Finalizar</button>
     </div>
   `;
+
+  document.getElementById("btn-toggle-pause").onclick = async function () {
+    try {
+      await toggleScreenPause(screen.id);
+      notifyManagementScreen(screen.id);
+      await refreshViewer();
+    } catch (error) {
+      alert(error.message || "Erro ao pausar operacao.");
+    }
+  };
 
   document.getElementById("btn-finalizar").onclick = async function () {
     if (isFinishing) {
@@ -86,6 +170,8 @@ function renderActiveState(screen) {
       isFinishing = false;
     }
   };
+
+  bindElapsedTimer(elapsedMs, false);
 }
 
 async function refreshViewer() {
@@ -108,7 +194,7 @@ async function refreshViewer() {
       return;
     }
 
-    const nextKey = `${screen.id}|${screen.current.index}|${screen.current.filename}|${screen.piece_history.length}`;
+    const nextKey = `${screen.id}|${screen.current.index}|${screen.current.filename}|${screen.piece_history.length}|${screen.paused ? 1 : 0}`;
     if (renderKey !== nextKey) {
       renderKey = nextKey;
       renderActiveState(screen);

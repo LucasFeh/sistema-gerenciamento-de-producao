@@ -81,3 +81,9 @@ export async function finishScreenPiece(screenId) {
     method: "POST",
   });
 }
+
+export async function toggleScreenPause(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/pausa`, {
+    method: "POST",
+  });
+}

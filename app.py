@@ -278,10 +278,28 @@ def reset_screen_tracking(slot_id):
     state = ensure_screen_runtime(slot_id)
     state["active"] = False
     state["production_started"] = False
+    state["paused"] = False
+    state["paused_at_ms"] = None
+    state["paused_total_ms"] = 0
     state["index"] = 0
     state["piece_started_at_ms"] = None
     state["piece_history"] = []
     state["queue"] = []
+
+
+def current_elapsed_ms(state, now_ms=None):
+    started_at = state.get("piece_started_at_ms")
+    if not started_at:
+        return 0
+
+    now_value = int(now_ms if now_ms is not None else time.time() * 1000)
+    paused_total = int(state.get("paused_total_ms", 0))
+
+    if state.get("paused"):
+        paused_at = int(state.get("paused_at_ms") or now_value)
+        return max(0, paused_at - int(started_at) - paused_total)
+
+    return max(0, now_value - int(started_at) - paused_total)
 
 
 def screen_snapshot(slot_id):
@@ -301,6 +319,7 @@ def screen_snapshot(slot_id):
         "pdf_count": len(files),
         "pdf_files": files,
         "active": state.get("active", False),
+        "paused": state.get("paused", False),
         "production_started": state.get("production_started", False),
         "current": current,
         "piece_history": state.get("piece_history", []),
@@ -317,6 +336,9 @@ def ensure_screen_runtime(slot_id):
         screen_runtime[slot_id] = {
             "active": False,
             "production_started": False,
+            "paused": False,
+            "paused_at_ms": None,
+            "paused_total_ms": 0,
             "index": 0,
             "piece_started_at_ms": None,
             "piece_history": [],
@@ -365,6 +387,9 @@ def apply_screen_queue_updates(slot_id, added_files, removed_files):
         # If production was finished and new pieces are added, continue automatically.
         if (not state.get("active")) and added_files and current_index < len(queue):
             state["active"] = True
+            state["paused"] = False
+            state["paused_at_ms"] = None
+            state["paused_total_ms"] = 0
             state["piece_started_at_ms"] = int(time.time() * 1000)
 
 
@@ -393,6 +418,8 @@ def current_screen_piece(slot_id):
         "total": len(files),
         "quantity": normalize_piece_quantity(metadata.get("piece_quantities", {}).get(current_filename, 1)),
         "started_at_ms": state.get("piece_started_at_ms"),
+        "elapsed_ms": current_elapsed_ms(state),
+        "paused": bool(state.get("paused", False)),
     }
 
 
@@ -407,6 +434,9 @@ def start_screen_production(slot_id):
 
     state["active"] = True
     state["production_started"] = True
+    state["paused"] = False
+    state["paused_at_ms"] = None
+    state["paused_total_ms"] = 0
     state["index"] = 0
     state["piece_started_at_ms"] = int(time.time() * 1000)
     state["piece_history"] = []
@@ -418,6 +448,8 @@ def advance_screen_production(slot_id):
     state = ensure_screen_runtime(slot_id)
     if not state.get("active"):
         return "not-active"
+    if state.get("paused"):
+        return "paused"
 
     files = normalize_queue_entries(state.get("queue", []))
     state["queue"] = files
@@ -427,7 +459,7 @@ def advance_screen_production(slot_id):
     if current_index < len(files):
         current_filename = files[current_index]
         start_ms = state.get("piece_started_at_ms") or now_ms
-        duration_ms = max(0, now_ms - start_ms)
+        duration_ms = current_elapsed_ms(state, now_ms)
         state["piece_history"].append(
             {
                 "process": "Tela",
@@ -442,10 +474,16 @@ def advance_screen_production(slot_id):
     state["index"] = current_index + 1
 
     if state["index"] < len(files):
+        state["paused"] = False
+        state["paused_at_ms"] = None
+        state["paused_total_ms"] = 0
         state["piece_started_at_ms"] = int(time.time() * 1000)
         return "next"
 
     state["active"] = False
+    state["paused"] = False
+    state["paused_at_ms"] = None
+    state["paused_total_ms"] = 0
     state["piece_started_at_ms"] = None
     return "finished"
 
@@ -947,6 +985,39 @@ def finish_screen_piece(slot_id):
             "screen": screen_snapshot(slot_id),
         }
     )
+
+
+@app.route("/api/telas/<int:slot_id>/pausa", methods=["POST"])
+def toggle_screen_pause(slot_id):
+    if not valid_screen_slot(slot_id):
+        return jsonify({"error": "Tela nao encontrada."}), 404
+
+    state = ensure_screen_runtime(slot_id)
+    if not state.get("active"):
+        return jsonify({"error": "Nao ha producao ativa para pausar."}), 400
+
+    now_ms = int(time.time() * 1000)
+    if state.get("paused"):
+        paused_at = int(state.get("paused_at_ms") or now_ms)
+        state["paused_total_ms"] = int(state.get("paused_total_ms", 0)) + max(0, now_ms - paused_at)
+        state["paused"] = False
+        state["paused_at_ms"] = None
+        result = "resumed"
+    else:
+        state["paused"] = True
+        state["paused_at_ms"] = now_ms
+        result = "paused"
+
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": result,
+            "timestamp": now_ms,
+        },
+    )
+
+    return jsonify({"result": result, "screen": screen_snapshot(slot_id)})
 
 
 @app.route("/api/telas/<int:slot_id>/visualizacao", methods=["GET"])

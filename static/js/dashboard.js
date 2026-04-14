@@ -71,19 +71,28 @@ function renderPieceHistory(history) {
     .join("");
 }
 
-function bindCurrentPieceTimer(startedAtMs) {
+function bindCurrentPieceTimer(initialElapsedMs, paused) {
   if (pieceTimerInterval) {
     clearInterval(pieceTimerInterval);
     pieceTimerInterval = null;
   }
 
   const timerElement = document.getElementById("current-piece-timer");
-  if (!timerElement || !startedAtMs) {
+  if (!timerElement) {
     return;
   }
 
+  const baseElapsed = Math.max(0, Number(initialElapsedMs || 0));
+  timerElement.textContent = formatDuration(baseElapsed);
+
+  if (paused) {
+    return;
+  }
+
+  const startedAt = Date.now();
   const updateTimer = () => {
-    timerElement.textContent = formatDuration(Date.now() - startedAtMs);
+    const delta = Date.now() - startedAt;
+    timerElement.textContent = formatDuration(baseElapsed + delta);
   };
 
   updateTimer();
@@ -100,7 +109,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   panel.innerHTML = `
     <button id="edit-pdfs" class="btn_Engrenagem" title="Editar PDFs" aria-label="Editar PDFs">&#9881;</button>
     <h1>${screenData.name}</h1>
-    <p>Status: <strong>${screenData.active ? "Em andamento" : "Aguardando"}</strong></p>
+    <p>Status: <strong>${screenData.paused ? "Pausado" : screenData.active ? "Em andamento" : "Aguardando"}</strong></p>
 
     <div class="screenUpload_Box">
       <label>Controle de producao</label>
@@ -114,7 +123,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
 
     ${screenData.production_started ? `
       <div class="timer_Box">
-        <p>Timer da peca atual: <strong id="current-piece-timer">${current ? formatDuration(Date.now() - (current.started_at_ms || Date.now())) : "--:--"}</strong></p>
+        <p>Timer da peca atual: <strong id="current-piece-timer">${current ? formatDuration(current.elapsed_ms || 0) : "--:--"}</strong></p>
       </div>
 
       <div class="barra_Progresso_Group pieceQueue_Block">
@@ -138,7 +147,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
     ` : '<p class="history_Empty">Os campos de producao serao gerados apos clicar em Iniciar Producao.</p>'}
   `;
 
-  bindCurrentPieceTimer(current ? current.started_at_ms : null);
+  bindCurrentPieceTimer(current ? current.elapsed_ms : null, Boolean(screenData.paused));
 
   document.getElementById("start-production").onclick = async function () {
     try {

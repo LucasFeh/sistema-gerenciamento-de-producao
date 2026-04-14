@@ -267,6 +267,12 @@ body {
   background: #f5fff8;
 }
 
+.pieceStatus_Item.waiting_confirmation {
+  border: 2px solid #facc15;
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.2);
+}
+
 .pieceStatus_Label {
   min-width: 0;
   display: flex;
@@ -313,6 +319,12 @@ body {
   background: #f0fdf4;
 }
 
+.pieceStatus_Badge.waiting_confirmation {
+  border-color: #d97706;
+  color: #d97706;
+  background: #fef3c7;
+}
+
 .responsavel_Box {
   margin: 12px 0 10px;
 }
@@ -356,6 +368,11 @@ body {
 .dot.current {
   background: var(--dot-current);
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.17);
+}
+
+.dot.waiting_confirmation {
+  background: #facc15;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.17);
 }
 
 .acoes_Producao {
@@ -1045,6 +1062,60 @@ body {
   margin: 0;
   font-size: 32px;
   letter-spacing: 1px;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.8), 0 0 20px rgba(245, 158, 11, 0.6);
+  }
+  50% {
+    opacity: 0.4;
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.4), 0 0 30px rgba(245, 158, 11, 0.2);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(245, 158, 11, 0.6), inset 0 0 20px rgba(251, 191, 36, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.4), 0 0 20px rgba(245, 158, 11, 0.2), inset 0 0 10px rgba(251, 191, 36, 0.1);
+  }
+}
+
+.confirmation_CenterBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 40px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 8px;
+  animation: glow-pulse 1.5s ease-in-out infinite;
+}
+
+.confirmation_Title {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fbbf24;
+  animation: blink 1.5s ease-in-out infinite;
+  text-transform: uppercase;
+}
+
+.confirmation_Responsible {
+  margin: 0;
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #fbbf24;
+  animation: blink 1.5s ease-in-out infinite 0.3s;
+  margin-top: 16px;
+  margin-bottom: 24px;
+  text-transform: uppercase;
 }
 
 @media (max-width: 980px) {

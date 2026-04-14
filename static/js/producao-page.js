@@ -1,4 +1,4 @@
-import { finishScreenPiece, getScreenDetail, toggleScreenPause } from "./api.js";
+import { finishScreenPiece, getScreenDetail, toggleScreenPause, confirmScreenProduction } from "./api.js";
 
 const container = document.getElementById("producao-container");
 const body = document.body;
@@ -72,8 +72,34 @@ function renderWaitingState(screen) {
       <h1>${screen.name}</h1>
       <p>Aguardando inicio da producao para esta tela.</p>
     </div>
-    <div class="producao_EmptyStage">Clique em Iniciar Producao no painel principal</div>
+    <div class="producao_EmptyStage">Aguardando inicio da producao...</div>
   `;
+}
+
+function renderWaitingConfirmation(screen) {
+  container.innerHTML = `
+    <div class="producao_Header">
+      <h1>${screen.name}</h1>
+    </div>
+
+    <div class="producao_EmptyStage">
+      <div class="confirmation_CenterBox">
+        <h2 class="confirmation_Title">NOVO PEDIDO DE PRODUÇÃO</h2>
+        <h2 class="confirmation_Responsible">${screen.responsible || "Responsavel nao informado"}</h2>
+        <button id="btn-confirm-production" class="btn_Finalizar btn_Finish">Iniciar</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btn-confirm-production").onclick = async function () {
+    try {
+      await confirmScreenProduction(screen.id);
+      notifyManagementScreen(screen.id);
+      await refreshViewer();
+    } catch (error) {
+      alert(error.message || "Erro ao confirmar producao.");
+    }
+  };
 }
 
 function renderFinishedState(screen) {
@@ -82,7 +108,7 @@ function renderFinishedState(screen) {
       <h1>${screen.name}</h1>
       <p>Producao finalizada.</p>
     </div>
-    <div class="producao_EmptyStage">Todos os PDFs desta tela foram concluidos.</div>
+    <div class="producao_EmptyStage">Todos as peças em produção desta tela foram concluidos.</div>
   `;
 }
 
@@ -182,6 +208,14 @@ async function refreshViewer() {
       if (renderKey !== "waiting") {
         renderKey = "waiting";
         renderWaitingState(screen);
+      }
+      return;
+    }
+
+    if (screen.waiting_confirmation) {
+      if (renderKey !== "waiting_confirmation") {
+        renderKey = "waiting_confirmation";
+        renderWaitingConfirmation(screen);
       }
       return;
     }

@@ -76,6 +76,12 @@ export async function startScreenProduction(screenId) {
   });
 }
 
+export async function confirmScreenProduction(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/confirmar`, {
+    method: "POST",
+  });
+}
+
 export async function finishScreenPiece(screenId) {
   return requestJson(`/api/telas/${encodeURIComponent(screenId)}/finalizar`, {
     method: "POST",

@@ -210,12 +210,15 @@ def build_piece_statuses(state, files, piece_quantities):
     done_count = len(history)
     current_index = int(state.get("index", 0))
     active = bool(state.get("active", False))
+    waiting_confirmation = bool(state.get("waiting_confirmation", False))
 
     statuses = []
     for index, filename in enumerate(queue):
         status = "pending"
         if index < done_count:
             status = "done"
+        elif waiting_confirmation and index == 0:
+            status = "waiting_confirmation"
         elif active and index == current_index:
             status = "current"
 
@@ -278,6 +281,7 @@ def reset_screen_tracking(slot_id):
     state = ensure_screen_runtime(slot_id)
     state["active"] = False
     state["production_started"] = False
+    state["waiting_confirmation"] = False
     state["paused"] = False
     state["paused_at_ms"] = None
     state["paused_total_ms"] = 0
@@ -320,6 +324,7 @@ def screen_snapshot(slot_id):
         "pdf_files": files,
         "active": state.get("active", False),
         "paused": state.get("paused", False),
+        "waiting_confirmation": state.get("waiting_confirmation", False),
         "production_started": state.get("production_started", False),
         "current": current,
         "piece_history": state.get("piece_history", []),
@@ -336,6 +341,7 @@ def ensure_screen_runtime(slot_id):
         screen_runtime[slot_id] = {
             "active": False,
             "production_started": False,
+            "waiting_confirmation": False,
             "paused": False,
             "paused_at_ms": None,
             "paused_total_ms": 0,
@@ -429,19 +435,32 @@ def start_screen_production(slot_id):
         return None, "empty"
 
     state = ensure_screen_runtime(slot_id)
-    if state.get("active"):
+    if state.get("active") or state.get("waiting_confirmation"):
         return state, "already-active"
 
-    state["active"] = True
     state["production_started"] = True
+    state["waiting_confirmation"] = True
     state["paused"] = False
     state["paused_at_ms"] = None
     state["paused_total_ms"] = 0
     state["index"] = 0
-    state["piece_started_at_ms"] = int(time.time() * 1000)
+    state["piece_started_at_ms"] = None
     state["piece_history"] = []
     state["queue"] = files
-    return state, "started"
+    return state, "waiting"
+
+
+def confirm_screen_production(slot_id):
+    state = ensure_screen_runtime(slot_id)
+    if not state.get("waiting_confirmation"):
+        return state, "not-waiting"
+    if state.get("active"):
+        return state, "already-active"
+
+    state["active"] = True
+    state["waiting_confirmation"] = False
+    state["piece_started_at_ms"] = int(time.time() * 1000)
+    return state, "confirmed"
 
 
 def advance_screen_production(slot_id):
@@ -955,7 +974,30 @@ def start_screen(slot_id):
         "production-updated",
         {
             "screenId": slot_id,
-            "result": "started",
+            "result": "waiting_confirmation",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
+    return jsonify({"message": "Aguardando confirmacao.", "screen": screen_snapshot(slot_id)})
+
+
+@app.route("/api/telas/<int:slot_id>/confirmar", methods=["POST"])
+def confirm_screen(slot_id):
+    if not valid_screen_slot(slot_id):
+        return jsonify({"error": "Tela nao encontrada."}), 404
+
+    _, status = confirm_screen_production(slot_id)
+    if status == "not-waiting":
+        return jsonify({"error": "Producao nao esta aguardando confirmacao."}), 409
+    if status == "already-active":
+        return jsonify({"error": "Esta tela ja esta em producao."}), 409
+
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": "confirmed",
             "timestamp": int(time.time() * 1000),
         },
     )

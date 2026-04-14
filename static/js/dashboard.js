@@ -31,10 +31,10 @@ function renderPieceStatuses(pieceStatuses) {
 
   return pieceStatuses
     .map((piece) => {
-      const dotClass = piece.status === "done" ? "dot done" : piece.status === "current" ? "dot current" : "dot";
-      const itemClass = piece.status === "done" ? "pieceStatus_Item done" : piece.status === "current" ? "pieceStatus_Item current" : "pieceStatus_Item";
-      const statusLabel = piece.status === "done" ? "FINALIZADO" : piece.status === "current" ? "EM PRODUCAO" : "PENDENTE";
-      const statusClass = piece.status === "done" ? "pieceStatus_Badge done" : piece.status === "current" ? "pieceStatus_Badge current" : "pieceStatus_Badge";
+      const dotClass = piece.status === "done" ? "dot done" : piece.status === "current" ? "dot current" : piece.status === "waiting_confirmation" ? "dot waiting_confirmation" : "dot";
+      const itemClass = piece.status === "done" ? "pieceStatus_Item done" : piece.status === "current" ? "pieceStatus_Item current" : piece.status === "waiting_confirmation" ? "pieceStatus_Item waiting_confirmation" : "pieceStatus_Item";
+      const statusLabel = piece.status === "done" ? "FINALIZADO" : piece.status === "current" ? "EM PRODUCAO" : piece.status === "waiting_confirmation" ? "AGUARDANDO CONFIRMACAO" : "PENDENTE";
+      const statusClass = piece.status === "done" ? "pieceStatus_Badge done" : piece.status === "current" ? "pieceStatus_Badge current" : piece.status === "waiting_confirmation" ? "pieceStatus_Badge waiting_confirmation" : "pieceStatus_Badge";
       const pieceName = (piece.filename || "").replace(/\.pdf$/i, "");
       return `
         <li class="${itemClass}">
@@ -109,12 +109,12 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   panel.innerHTML = `
     <button id="edit-pdfs" class="btn_Engrenagem" title="Editar PDFs" aria-label="Editar PDFs">&#9881;</button>
     <h1>${screenData.name}</h1>
-    <p>Status: <strong>${screenData.paused ? "Pausado" : screenData.active ? "Em andamento" : "Aguardando"}</strong></p>
+    <p>Status: <strong>${screenData.paused ? "Pausado" : screenData.active ? "Em andamento" : screenData.waiting_confirmation ? "Aguardando confirmacao" : "Aguardando"}</strong></p>
 
     <div class="screenUpload_Box">
       <label>Controle de producao</label>
       <div class="screenUpload_Row">
-        <button id="start-production" class="btn_IniciarProducao" type="button" ${screenData.active ? "disabled" : ""}>Iniciar Producao</button>
+        <button id="start-production" class="btn_IniciarProducao" type="button" ${screenData.active || screenData.waiting_confirmation ? "disabled" : ""}>Iniciar Producao</button>
         <a class="btn_AbrirVisualizacao" href="/producao/${screenData.id}" target="_blank" rel="noopener">Abrir Visualizacao</a>
         <button id="download-report" class="btn_BaixarRelatorio" type="button" ${reportEnabled ? "" : "disabled"}>Baixar relatorio</button>
       </div>

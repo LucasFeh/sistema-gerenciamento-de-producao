@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-BASE_STORAGE_DIR = Path(os.getenv("EQUIPMENTS_ROOT", "D:/MICROCONTROLLER_DEV/Sistema_Mecanica/equipamentos"))
+BASE_STORAGE_DIR = Path(os.path.dirname(__file__)) / "screen"
 BASE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 SCREEN_SLOTS = 5

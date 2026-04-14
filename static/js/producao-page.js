@@ -1,59 +1,51 @@
-import { finishCurrentProduction, getCurrentProduction } from "./api.js";
+import { finishScreenPiece, getScreenDetail } from "./api.js";
 
 const container = document.getElementById("producao-container");
+const body = document.body;
+const screenId = Number(body.dataset.screenId || 1);
 let renderKey = "";
 let isFinishing = false;
-const POLL_MS = 2000;
-const PRODUCTION_EVENTS_CHANNEL = "production-events";
 
-function buildPdfUrl(data) {
-  const equipment = encodeURIComponent(data.name);
-  const process = encodeURIComponent(data.current.process);
-  const filename = encodeURIComponent(data.current.filename);
-  return `/arquivos/${equipment}/${process}/${filename}`;
+function buildPdfUrl(filename) {
+  return `/arquivos/telas/${encodeURIComponent(screenId)}/${encodeURIComponent(filename)}`;
 }
 
-function notifyManagement(equipmentName) {
-  const payload = {
-    type: "production-finished",
-    equipmentName: equipmentName || "",
-    timestamp: Date.now(),
-  };
-
-  if ("BroadcastChannel" in window) {
-    const channel = new BroadcastChannel(PRODUCTION_EVENTS_CHANNEL);
-    channel.postMessage(payload);
-    channel.close();
-  }
-
-  localStorage.setItem("production-finished", JSON.stringify(payload));
-}
-
-function renderWaitingState() {
+function renderWaitingState(screen) {
   container.innerHTML = `
     <div class="producao_Header">
-      <h1>Aguardando producao</h1>
-      <p>Quando um processo entrar em producao, esta tela atualiza automaticamente.</p>
+      <h1>${screen.name}</h1>
+      <p>Aguardando inicio da producao para esta tela.</p>
     </div>
-    <div class="producao_EmptyStage">Sem PDF em visualizacao</div>
+    <div class="producao_EmptyStage">Clique em Iniciar Producao no painel principal</div>
   `;
 }
 
-function renderActiveState(data) {
+function renderFinishedState(screen) {
   container.innerHTML = `
     <div class="producao_Header">
-      <h1>${data.name}</h1>
+      <h1>${screen.name}</h1>
+      <p>Producao finalizada.</p>
+    </div>
+    <div class="producao_EmptyStage">Todos os PDFs desta tela foram concluidos.</div>
+  `;
+}
+
+function renderActiveState(screen) {
+  const current = screen.current;
+  const pieceTitle = (current.piece_name || current.filename || "Peca").replace(/\.pdf$/i, "");
+
+  container.innerHTML = `
+    <div class="producao_Header">
+      <h1>${pieceTitle}</h1>
       <div class="producao_Meta">
-        <p>Processo: <strong>${data.current.process}</strong></p>
-        <p>Peca ${data.current.index + 1} de ${data.current.total}</p>
+        <p>Quantidade de pecas: <strong>${current.quantity || 1}</strong></p>
+        <p>Nome do responsavel pela producao: <strong>${screen.responsible || "Nao informado"}</strong></p>
+        <p>Tipo de operacao: <strong>${screen.operation_type || "Nao informado"}</strong></p>
+        <p>Paginacao: <strong>${current.index + 1} de ${current.total}</strong></p>
       </div>
     </div>
 
-    <iframe
-      class="pdf_Frame"
-      src="${buildPdfUrl(data)}"
-      title="Visualizador de PDF"
-    ></iframe>
+    <iframe class="pdf_Frame" src="${buildPdfUrl(current.filename)}" title="Visualizador de PDF"></iframe>
 
     <div class="producao_Footer">
       <button id="btn-finalizar" class="btn_Finalizar">Finalizar</button>
@@ -64,18 +56,11 @@ function renderActiveState(data) {
     if (isFinishing) {
       return;
     }
+
     isFinishing = true;
     try {
-      const payload = await finishCurrentProduction();
-      const reportEquipment = payload.equipmentName || data.name;
-      notifyManagement(reportEquipment);
-      if (!payload.active || !payload.equipment || !payload.equipment.current) {
-        renderKey = "waiting";
-        renderWaitingState();
-        return;
-      }
-      renderKey = `${payload.equipment.name}|${payload.equipment.current.process}|${payload.equipment.current.index}|${payload.equipment.current.filename}`;
-      renderActiveState(payload.equipment);
+      await finishScreenPiece(screen.id);
+      await refreshViewer();
     } catch (error) {
       alert(error.message || "Erro ao finalizar etapa.");
     } finally {
@@ -84,30 +69,36 @@ function renderActiveState(data) {
   };
 }
 
-async function loadCurrentProduction() {
+async function refreshViewer() {
   try {
-    const payload = await getCurrentProduction();
-    if (!payload.active || !payload.equipment || !payload.equipment.current) {
+    const screen = await getScreenDetail(screenId);
+
+    if (!screen.production_started) {
       if (renderKey !== "waiting") {
         renderKey = "waiting";
-        renderWaitingState();
+        renderWaitingState(screen);
       }
       return;
     }
 
-    const equipment = payload.equipment;
-    const nextKey = `${equipment.name}|${equipment.current.process}|${equipment.current.index}|${equipment.current.filename}`;
+    if (!screen.active || !screen.current) {
+      if (renderKey !== "finished") {
+        renderKey = "finished";
+        renderFinishedState(screen);
+      }
+      return;
+    }
+
+    const nextKey = `${screen.id}|${screen.current.index}|${screen.current.filename}|${screen.piece_history.length}`;
     if (renderKey !== nextKey) {
       renderKey = nextKey;
-      renderActiveState(equipment);
+      renderActiveState(screen);
     }
   } catch (error) {
-    if (renderKey !== "waiting") {
-      renderKey = "waiting";
-      renderWaitingState();
-    }
+    renderKey = "error";
+    container.innerHTML = "<p>Erro ao carregar visualizacao da tela.</p>";
   }
 }
 
-loadCurrentProduction();
-window.setInterval(loadCurrentProduction, POLL_MS);
+refreshViewer();
+window.setInterval(refreshViewer, 2000);

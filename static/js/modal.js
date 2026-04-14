@@ -1,33 +1,58 @@
-import { deleteEquipment, getEquipmentDetail, saveEquipment } from "./api.js";
+import { getScreenDetail, updateScreenName, updateScreenPdfs } from "./api.js";
 
-export function createModalController(onSaved) {
+export function createModalController(getSelectedScreenId, onSaved) {
   const modal = document.getElementById("equipment-modal");
   const equipmentForm = document.getElementById("equipment-form");
   const nameInput = document.getElementById("equipment-name");
+  const responsibleInput = document.getElementById("responsible-name");
+  const operationTypeInput = document.getElementById("operation-type");
   const tornoInput = document.getElementById("torno-pdfs");
-  const fresaInput = document.getElementById("fresa-pdfs");
   const feedback = document.getElementById("form-feedback");
-  const deleteButton = document.getElementById("delete-equipment");
+  const openModalButton = document.getElementById("open-modal");
 
-  let equipmentExists = false;
-
-  function syncDeleteButtonState() {
-    deleteButton.disabled = !equipmentExists;
-    deleteButton.title = equipmentExists ? "Apagar equipamento" : "Informe um equipamento existente para apagar";
-  }
+  let activeScreenId = null;
 
   const selectedUploads = {
     torno: [],
-    fresa: [],
   };
   const existingFiles = {
     torno: [],
-    fresa: [],
   };
   const removedFiles = {
     torno: new Set(),
-    fresa: new Set(),
   };
+  const pieceQuantities = {};
+
+  function quantityFor(filename) {
+    return Math.max(1, Number(pieceQuantities[filename] || 1));
+  }
+
+  function updateQuantity(filename, rawValue) {
+    const parsed = Number(rawValue);
+    pieceQuantities[filename] = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+  }
+
+  function buildVisiblePieceQuantities() {
+    const payload = {};
+
+    existingFiles.torno
+      .filter((filename) => !removedFiles.torno.has(filename))
+      .forEach((filename) => {
+        payload[filename] = quantityFor(filename);
+      });
+
+    return payload;
+  }
+
+  function buildUploadPieceQuantities() {
+    const payload = {};
+
+    selectedUploads.torno.forEach((file) => {
+      payload[file.name] = quantityFor(file.name);
+    });
+
+    return payload;
+  }
 
   function renderPreview(processName) {
     const target = document.getElementById(`${processName}-preview`);
@@ -50,8 +75,18 @@ export function createModalController(onSaved) {
       card.innerHTML = `
         <span class="pdf_Tag">PDF</span>
         <p title="${filename}">${filename}</p>
-        <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${filename}">x</button>
+        <div class="pdf_CardFooter">
+          <div class="pdf_QtyBox">
+            <label class="pdf_QtyLabel">Qtd</label>
+            <input type="number" min="1" step="1" class="pdf_QtyInput" value="${quantityFor(filename)}" />
+          </div>
+          <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${filename}">x</button>
+        </div>
       `;
+
+      card.querySelector(".pdf_QtyInput").oninput = function (event) {
+        updateQuantity(filename, event.target.value);
+      };
 
       card.querySelector(".pdf_RemoveBtn").onclick = function () {
         removedFiles[processName].add(filename);
@@ -67,10 +102,21 @@ export function createModalController(onSaved) {
       card.innerHTML = `
         <span class="pdf_Tag">NOVO</span>
         <p title="${file.name}">${file.name}</p>
-        <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${file.name}">x</button>
+        <div class="pdf_CardFooter">
+          <div class="pdf_QtyBox">
+            <label class="pdf_QtyLabel">Qtd</label>
+            <input type="number" min="1" step="1" class="pdf_QtyInput" value="${quantityFor(file.name)}" />
+          </div>
+          <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${file.name}">x</button>
+        </div>
       `;
 
+      card.querySelector(".pdf_QtyInput").oninput = function (event) {
+        updateQuantity(file.name, event.target.value);
+      };
+
       card.querySelector(".pdf_RemoveBtn").onclick = function () {
+        delete pieceQuantities[file.name];
         selectedUploads[processName].splice(index, 1);
         renderPreview(processName);
       };
@@ -81,7 +127,6 @@ export function createModalController(onSaved) {
 
   function renderPreviews() {
     renderPreview("torno");
-    renderPreview("fresa");
   }
 
   function appendSelectedFiles(processName, fileList) {
@@ -90,44 +135,48 @@ export function createModalController(onSaved) {
       return;
     }
     selectedUploads[processName] = selectedUploads[processName].concat(incoming);
+    incoming.forEach((file) => {
+      if (!pieceQuantities[file.name]) {
+        pieceQuantities[file.name] = 1;
+      }
+    });
     renderPreview(processName);
   }
 
-  async function loadExistingFilesByName(equipmentName) {
-    if (!equipmentName) {
-      equipmentExists = false;
-      syncDeleteButtonState();
+  async function loadScreenData(screenId) {
+    if (!screenId) {
       existingFiles.torno = [];
-      existingFiles.fresa = [];
       removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
       renderPreviews();
       return;
     }
 
     try {
-      const payload = await getEquipmentDetail(equipmentName);
-      equipmentExists = true;
-      syncDeleteButtonState();
-      existingFiles.torno = payload.torno_files || [];
-      existingFiles.fresa = payload.fresa_files || [];
+      const payload = await getScreenDetail(screenId);
+      activeScreenId = payload.id;
+      nameInput.value = payload.name || "";
+      responsibleInput.value = payload.responsible || "";
+      operationTypeInput.value = payload.operation_type || "";
+      existingFiles.torno = payload.pdf_files || [];
+      Object.keys(pieceQuantities).forEach((key) => {
+        delete pieceQuantities[key];
+      });
+      existingFiles.torno.forEach((filename) => {
+        pieceQuantities[filename] = Number(payload.piece_quantities?.[filename] || 1);
+      });
       removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
       renderPreviews();
     } catch (error) {
-      equipmentExists = false;
-      syncDeleteButtonState();
       existingFiles.torno = [];
-      existingFiles.fresa = [];
+      responsibleInput.value = "";
+      operationTypeInput.value = "";
       removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
       renderPreviews();
     }
   }
 
   function openModal() {
     modal.classList.remove("hidden");
-    loadExistingFilesByName(nameInput.value.trim());
     renderPreviews();
   }
 
@@ -135,61 +184,21 @@ export function createModalController(onSaved) {
     modal.classList.add("hidden");
   }
 
-  document.getElementById("open-modal").onclick = function () {
-    nameInput.value = "";
-    equipmentExists = false;
-    syncDeleteButtonState();
-    selectedUploads.torno = [];
-    selectedUploads.fresa = [];
-    existingFiles.torno = [];
-    existingFiles.fresa = [];
-    removedFiles.torno = new Set();
-    removedFiles.fresa = new Set();
-    openModal();
-  };
+  if (openModalButton) {
+    openModalButton.onclick = function () {
+      activeScreenId = Number(getSelectedScreenId());
+      selectedUploads.torno = [];
+      existingFiles.torno = [];
+      removedFiles.torno = new Set();
+      Object.keys(pieceQuantities).forEach((key) => {
+        delete pieceQuantities[key];
+      });
+      loadScreenData(activeScreenId);
+      openModal();
+    };
+  }
 
   document.getElementById("close-modal").onclick = closeModal;
-
-  deleteButton.onclick = async function () {
-    const equipmentName = nameInput.value.trim();
-    if (!equipmentName) {
-      feedback.textContent = "Informe o nome do equipamento para apagar.";
-      feedback.className = "feedback error";
-      return;
-    }
-
-    if (!equipmentExists) {
-      feedback.textContent = "Esse equipamento nao existe.";
-      feedback.className = "feedback error";
-      return;
-    }
-
-    const confirmed = window.confirm(`Apagar o equipamento '${equipmentName}' e toda a pasta dele?`);
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await deleteEquipment(equipmentName);
-      feedback.textContent = "Equipamento apagado com sucesso.";
-      feedback.className = "feedback success";
-
-      equipmentForm.reset();
-      equipmentExists = false;
-      syncDeleteButtonState();
-      selectedUploads.torno = [];
-      selectedUploads.fresa = [];
-      existingFiles.torno = [];
-      existingFiles.fresa = [];
-      removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
-      closeModal();
-      await onSaved({ deleted: true, name: equipmentName });
-    } catch (error) {
-      feedback.textContent = error.message || "Erro ao apagar equipamento.";
-      feedback.className = "feedback error";
-    }
-  };
 
   modal.onclick = function (event) {
     if (event.target === modal) {
@@ -209,12 +218,10 @@ export function createModalController(onSaved) {
 
       button.classList.add("active");
       const target = document.getElementById(`tab-${button.dataset.tab}`);
-      target.classList.add("active");
+      if (target) {
+        target.classList.add("active");
+      }
     };
-  });
-
-  nameInput.addEventListener("blur", function () {
-    loadExistingFilesByName(nameInput.value.trim());
   });
 
   tornoInput.addEventListener("change", function () {
@@ -222,52 +229,70 @@ export function createModalController(onSaved) {
     tornoInput.value = "";
   });
 
-  fresaInput.addEventListener("change", function () {
-    appendSelectedFiles("fresa", fresaInput.files);
-    fresaInput.value = "";
-  });
-
   equipmentForm.onsubmit = async function (event) {
     event.preventDefault();
-    feedback.textContent = "Salvando equipamento...";
+
+    if (!activeScreenId) {
+      if (feedback) {
+        feedback.textContent = "Selecione uma tela para salvar os PDFs.";
+        feedback.className = "feedback error";
+      }
+      return;
+    }
+
+    if (feedback) {
+      feedback.textContent = "Salvando PDFs da tela...";
+    }
 
     try {
-      const payload = await saveEquipment(
-        nameInput.value,
+      const nextName = nameInput.value.trim();
+      if (!nextName) {
+        throw new Error("Nome da tela e obrigatorio.");
+      }
+
+      await updateScreenName(activeScreenId, nextName);
+      const payload = await updateScreenPdfs(
+        activeScreenId,
         selectedUploads.torno,
-        selectedUploads.fresa,
         Array.from(removedFiles.torno),
-        Array.from(removedFiles.fresa)
+        {
+          responsible: responsibleInput.value.trim(),
+          operation_type: operationTypeInput.value.trim(),
+          piece_quantities: buildVisiblePieceQuantities(),
+          upload_piece_quantities: buildUploadPieceQuantities(),
+        }
       );
-      feedback.textContent = payload.created ? "Equipamento criado com sucesso." : "PDFs atualizados com sucesso.";
-      feedback.className = "feedback success";
+      if (feedback) {
+        feedback.textContent = "PDFs atualizados com sucesso.";
+        feedback.className = "feedback success";
+      }
 
       equipmentForm.reset();
-      equipmentExists = false;
-      syncDeleteButtonState();
       selectedUploads.torno = [];
-      selectedUploads.fresa = [];
       existingFiles.torno = [];
-      existingFiles.fresa = [];
       removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
+      Object.keys(pieceQuantities).forEach((key) => {
+        delete pieceQuantities[key];
+      });
       closeModal();
       await onSaved(payload);
     } catch (error) {
-      feedback.textContent = error.message || "Erro ao salvar equipamento.";
-      feedback.className = "feedback error";
+      if (feedback) {
+        feedback.textContent = error.message || "Erro ao salvar PDFs.";
+        feedback.className = "feedback error";
+      }
     }
   };
 
   return {
-    openForEquipment(equipmentName) {
-      nameInput.value = equipmentName || "";
-      equipmentExists = false;
-      syncDeleteButtonState();
+    openForScreen(screenId) {
+      activeScreenId = Number(screenId || getSelectedScreenId());
       selectedUploads.torno = [];
-      selectedUploads.fresa = [];
       removedFiles.torno = new Set();
-      removedFiles.fresa = new Set();
+      Object.keys(pieceQuantities).forEach((key) => {
+        delete pieceQuantities[key];
+      });
+      loadScreenData(activeScreenId);
       openModal();
     },
   };

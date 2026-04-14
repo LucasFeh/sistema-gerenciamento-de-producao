@@ -1,28 +1,6 @@
-import { decideFresa, finishCurrentPiece, getEquipmentDetail, listEquipments, resetProductionTracking, startProduction } from "./api.js";
+import { getScreenDetail, listScreens, startScreenProduction } from "./api.js";
 
 let pieceTimerInterval = null;
-
-function renderProgressDots(total, doneCount, currentIndex) {
-  const safeTotal = Math.max(total, 1);
-  let dots = "";
-
-  for (let index = 0; index < safeTotal; index += 1) {
-    let dotClass = "dot";
-    if (index < doneCount) {
-      dotClass = "dot done";
-    }
-    if (currentIndex !== null && index === currentIndex) {
-      dotClass = "dot current";
-    }
-    dots += `<span class="${dotClass}"></span>`;
-  }
-
-  return dots;
-}
-
-function productionPageUrl() {
-  return "/producao";
-}
 
 function formatDuration(durationMs) {
   const totalSeconds = Math.floor((durationMs || 0) / 1000);
@@ -33,6 +11,7 @@ function formatDuration(durationMs) {
   if (hours > 0) {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
+
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -40,18 +19,36 @@ function formatClock(timestampMs) {
   if (!timestampMs) {
     return "--:--:--";
   }
+
   const date = new Date(timestampMs);
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
 }
 
-function canDownloadReport(data) {
-  if (!data) {
-    return false;
+function renderPieceStatuses(pieceStatuses) {
+  if (!pieceStatuses || pieceStatuses.length === 0) {
+    return '<li class="screenPdf_Empty">Nenhuma peca na fila.</li>';
   }
 
-  const ended = !data.active && !data.pending_fresa_confirmation;
-  const hasHistory = (data.piece_history || []).length > 0;
-  return ended && hasHistory;
+  return pieceStatuses
+    .map((piece) => {
+      const dotClass = piece.status === "done" ? "dot done" : piece.status === "current" ? "dot current" : "dot";
+      const itemClass = piece.status === "done" ? "pieceStatus_Item done" : piece.status === "current" ? "pieceStatus_Item current" : "pieceStatus_Item";
+      const statusLabel = piece.status === "done" ? "FINALIZADO" : piece.status === "current" ? "EM PRODUCAO" : "PENDENTE";
+      const statusClass = piece.status === "done" ? "pieceStatus_Badge done" : piece.status === "current" ? "pieceStatus_Badge current" : "pieceStatus_Badge";
+      const pieceName = (piece.filename || "").replace(/\.pdf$/i, "");
+      return `
+        <li class="${itemClass}">
+          <div class="pieceStatus_Label">
+            <div class="pieceStatus_MainLine">
+              <span class="${statusClass}">${statusLabel}</span>
+              <span class="pieceStatus_Name" title="${pieceName}">${pieceName}</span>
+            </div>
+          </div>
+          <span class="${dotClass}"></span>
+        </li>
+      `;
+    })
+    .join("");
 }
 
 function renderPieceHistory(history) {
@@ -80,214 +77,112 @@ function bindCurrentPieceTimer(startedAtMs) {
     pieceTimerInterval = null;
   }
 
-  if (!startedAtMs) {
-    return;
-  }
-
   const timerElement = document.getElementById("current-piece-timer");
-  if (!timerElement) {
+  if (!timerElement || !startedAtMs) {
     return;
   }
 
-  const update = () => {
-    const elapsed = Date.now() - startedAtMs;
-    timerElement.textContent = formatDuration(elapsed);
+  const updateTimer = () => {
+    timerElement.textContent = formatDuration(Date.now() - startedAtMs);
   };
 
-  update();
-  pieceTimerInterval = window.setInterval(update, 1000);
+  updateTimer();
+  pieceTimerInterval = window.setInterval(updateTimer, 1000);
 }
 
-function buildProcessState(data, processName, totalCount) {
-  const history = data.piece_history || [];
-  const completedCount = history.filter((entry) => entry.process === processName).length;
-
-  if (!data.current || !data.active || data.current.process !== processName) {
-    return { doneCount: Math.min(completedCount, totalCount), currentIndex: null };
-  }
-
-  const rawIndex = data.current.index;
-  const safeIndex = Math.max(0, Math.min(rawIndex, Math.max(totalCount - 1, 0)));
-  return {
-    doneCount: Math.min(completedCount, safeIndex),
-    currentIndex: safeIndex,
-  };
-}
-
-export function renderEquipmentInfo(data, onEditPdfs, onStateChanged) {
+export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   const panel = document.getElementById("equip-info");
-  const tornoState = buildProcessState(data, "Torno", data.torno_count);
-  const fresaState = buildProcessState(data, "Fresa", data.fresa_count);
-  const viewUrl = productionPageUrl();
-  const currentStart = data.current ? data.current.started_at_ms : null;
-  const reportEnabled = canDownloadReport(data);
+  const history = screenData.piece_history || [];
+  const current = screenData.current;
+  const pieceStatuses = screenData.piece_statuses || [];
 
   panel.innerHTML = `
     <button id="edit-pdfs" class="btn_Engrenagem" title="Editar PDFs" aria-label="Editar PDFs">&#9881;</button>
-    <h1>${data.name}</h1>
-    <p>Status: <strong>${data.active ? "Em andamento" : "Aguardando"}</strong></p>
+    <h1>${screenData.name}</h1>
+    <p>Status: <strong>${screenData.active ? "Em andamento" : "Aguardando"}</strong></p>
 
-    <div class="barra_Progresso_Group">
-      <p>Torno (${data.torno_count} PDF)</p>
-      <div class="barra_Bolinhas">${renderProgressDots(data.torno_count, tornoState.doneCount, tornoState.currentIndex)}</div>
-    </div>
-
-    <div class="barra_Progresso_Group">
-      <p>Fresa (${data.fresa_count} PDF)</p>
-      <div class="barra_Bolinhas">${renderProgressDots(data.fresa_count, fresaState.doneCount, fresaState.currentIndex)}</div>
-    </div>
-
-    <div class="acoes_Producao">
-      <button id="start-production" class="btn_IniciarProducao" ${data.active ? "disabled" : ""}>Iniciar Producao</button>
-      <button id="download-report" class="btn_BaixarRelatorio" ${reportEnabled ? "" : "disabled"}>Baixar relatorio</button>
-      ${data.active ? '<button id="finish-step" class="btn_FinalizarEtapa">Finalizar Etapa Atual</button>' : ""}
-      ${data.active && data.current ? `<a class="btn_AbrirVisualizacao" href="${viewUrl}" target="_blank" rel="noopener">Abrir Visualizacao</a>` : ""}
-    </div>
-
-    ${data.pending_fresa_confirmation ? `
-      <div class="decision_Box">
-        <p>Torno finalizado. Deseja prosseguir com a Fresa?</p>
-        <button id="fresa-yes" class="btn_DecisionYes">Sim</button>
-        <button id="fresa-no" class="btn_DecisionNo">Nao</button>
+    <div class="screenUpload_Box">
+      <label>Controle de producao</label>
+      <div class="screenUpload_Row">
+        <button id="start-production" class="btn_IniciarProducao" type="button" ${screenData.active ? "disabled" : ""}>Iniciar Producao</button>
+        <a class="btn_AbrirVisualizacao" href="/producao/${screenData.id}" target="_blank" rel="noopener">Abrir Visualizacao</a>
       </div>
-    ` : ""}
-
-    ${data.active && data.current ? `<p class="viewer_Title">Em visualizacao: ${data.current.process} - ${data.current.filename}</p>` : ""}
-
-    <div class="timer_Box">
-      <p>Timer da peca atual: <strong id="current-piece-timer">${currentStart ? formatDuration(Date.now() - currentStart) : "--:--"}</strong></p>
     </div>
 
-    <div class="history_Box">
-      <p>Historico de pecas finalizadas</p>
-      <div class="history_HeaderRow">
-        <span>Nome</span>
-        <span>Tipo</span>
-        <span>Hora de inicio</span>
-        <span>Hora de termino</span>
-        <span>Tempo de producao</span>
+
+    ${screenData.production_started ? `
+      <div class="timer_Box">
+        <p>Timer da peca atual: <strong id="current-piece-timer">${current ? formatDuration(Date.now() - (current.started_at_ms || Date.now())) : "--:--"}</strong></p>
       </div>
-      <ul class="history_List">
-        ${renderPieceHistory(data.piece_history || [])}
-      </ul>
-    </div>
+
+      <div class="barra_Progresso_Group pieceQueue_Block">
+        <h3 class="pieceQueue_Title">Fila de producao</h3>
+        <ul class="pieceStatus_List">${renderPieceStatuses(pieceStatuses)}</ul>
+      </div>
+
+      <div class="history_Box">
+        <p>Historico de pecas finalizadas</p>
+        <div class="history_HeaderRow">
+          <span>Nome</span>
+          <span>Tipo</span>
+          <span>Hora de inicio</span>
+          <span>Hora de termino</span>
+          <span>Tempo de producao</span>
+        </div>
+        <ul class="history_List">
+          ${renderPieceHistory(history)}
+        </ul>
+      </div>
+    ` : '<p class="history_Empty">Os campos de producao serao gerados apos clicar em Iniciar Producao.</p>'}
   `;
 
-  bindCurrentPieceTimer(currentStart);
+  bindCurrentPieceTimer(current ? current.started_at_ms : null);
 
   document.getElementById("start-production").onclick = async function () {
     try {
-      const payload = await startProduction(data.name);
-      renderEquipmentInfo(payload.equipment, onEditPdfs, onStateChanged);
-      if (onStateChanged) {
-        await onStateChanged(payload.equipment.name);
-      }
+      const payload = await startScreenProduction(screenData.id);
+      renderScreenInfo(payload.screen, onOpenModal, onChanged);
+      await onChanged(payload.screen.id);
     } catch (error) {
       alert(error.message || "Erro ao iniciar producao.");
     }
   };
 
-  document.getElementById("download-report").onclick = async function () {
-    if (!reportEnabled) {
-      return;
-    }
-
-    try {
-      const reportUrl = `/api/equipamentos/${encodeURIComponent(data.name)}/relatorio`;
-      const response = await fetch(reportUrl);
-      if (!response.ok) {
-        throw new Error("Erro ao baixar relatorio.");
-      }
-
-      const reportBlob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(reportBlob);
-      const downloadLink = document.createElement("a");
-      downloadLink.href = objectUrl;
-      downloadLink.download = `relatorio_${data.name}.pdf`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      downloadLink.remove();
-      window.URL.revokeObjectURL(objectUrl);
-
-      await resetProductionTracking(data.name);
-      if (onStateChanged) {
-        await onStateChanged(data.name);
-      }
-    } catch (error) {
-      alert(error.message || "Erro ao zerar historico apos relatorio.");
-    }
-  };
-
-  if (data.active) {
-    document.getElementById("finish-step").onclick = async function () {
-      try {
-        const payload = await finishCurrentPiece(data.name);
-        const updated = payload.equipment;
-        renderEquipmentInfo(updated, onEditPdfs, onStateChanged);
-        if (onStateChanged) {
-          await onStateChanged((updated && updated.name) || data.name);
-        }
-      } catch (error) {
-        alert(error.message || "Erro ao finalizar etapa.");
-      }
-    };
-  }
-
-  if (data.pending_fresa_confirmation) {
-    document.getElementById("fresa-yes").onclick = async function () {
-      try {
-        const payload = await decideFresa(data.name, true);
-        renderEquipmentInfo(payload.equipment, onEditPdfs, onStateChanged);
-        if (onStateChanged) {
-          await onStateChanged(payload.equipment.name);
-        }
-      } catch (error) {
-        alert(error.message || "Erro ao iniciar Fresa.");
-      }
-    };
-
-    document.getElementById("fresa-no").onclick = async function () {
-      try {
-        const payload = await decideFresa(data.name, false);
-        renderEquipmentInfo(payload.equipment, onEditPdfs, onStateChanged);
-        if (onStateChanged) {
-          await onStateChanged(payload.equipment.name);
-        }
-      } catch (error) {
-        alert(error.message || "Erro ao finalizar producao.");
-      }
-    };
-  }
-
   document.getElementById("edit-pdfs").onclick = function () {
-    onEditPdfs(data.name);
+    onOpenModal(screenData.id);
   };
 }
 
-export async function loadEquipmentList(onSelectEquipment) {
+export async function loadScreenList(selectedScreenId, onSelectScreen) {
   const listElement = document.getElementById("equip-list");
   listElement.innerHTML = "";
 
-  try {
-    const equipments = await listEquipments();
-    equipments.forEach((equip) => {
-      const item = document.createElement("li");
-      item.className = "list-item";
-      item.innerHTML = `
-        <span>${equip.name}</span>
-        ${equip.active ? '<span class="badge_Andamento">Em andamento</span>' : ""}
-      `;
-      item.onclick = async function () {
-        try {
-          const detail = await getEquipmentDetail(equip.name);
-          onSelectEquipment(detail);
-        } catch (error) {
-          alert(error.message || "Erro ao carregar equipamento.");
-        }
-      };
-      listElement.appendChild(item);
-    });
-  } catch (error) {
-    alert(error.message || "Erro ao carregar lista de equipamentos.");
-  }
+  const screens = await listScreens();
+  screens.forEach((screen) => {
+    const item = document.createElement("li");
+    item.className = "list-item";
+
+    if (Number(selectedScreenId) === Number(screen.id)) {
+      item.classList.add("active");
+    }
+
+    item.innerHTML = `
+      <span>${screen.name}</span>
+      <span class="badge_Andamento">${screen.pdf_count} pecas</span>
+    `;
+
+    item.onclick = async function () {
+      listElement.querySelectorAll(".list-item").forEach((listItem) => {
+        listItem.classList.remove("active");
+      });
+      item.classList.add("active");
+
+      const detail = await getScreenDetail(screen.id);
+      onSelectScreen(detail);
+    };
+
+    listElement.appendChild(item);
+  });
+
+  return screens;
 }

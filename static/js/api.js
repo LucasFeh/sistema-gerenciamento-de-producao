@@ -15,80 +15,69 @@ async function requestJson(url, options = {}) {
   return payload;
 }
 
-export async function listEquipments() {
-  return requestJson("/api/equipamentos");
+export async function listScreens() {
+  return requestJson("/api/telas");
 }
 
-export async function getEquipmentDetail(equipmentName) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}`);
+export async function getScreenDetail(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}`);
 }
 
-export async function deleteEquipment(equipmentName) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}`, {
-    method: "DELETE",
+export async function updateScreenName(screenId, screenName) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/nome`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: (screenName || "").trim() }),
   });
 }
 
-export async function saveEquipment(equipmentName, tornoFiles, fresaFiles, removeTornoFiles = [], removeFresaFiles = []) {
+export async function updateScreenPdfs(screenId, files = [], removeFiles = [], metadata = {}) {
   const formData = new FormData();
-  formData.append("name", equipmentName.trim());
 
-  tornoFiles.forEach((file) => {
-    formData.append("torno_pdfs", file);
+  files.forEach((file) => {
+    formData.append("pdfs", file);
   });
 
-  fresaFiles.forEach((file) => {
-    formData.append("fresa_pdfs", file);
+  removeFiles.forEach((filename) => {
+    formData.append("remove_files", filename);
   });
 
-  removeTornoFiles.forEach((filename) => {
-    formData.append("remove_torno_files", filename);
-  });
+  if (metadata && Object.prototype.hasOwnProperty.call(metadata, "responsible")) {
+    formData.append("responsible", metadata.responsible || "");
+  }
 
-  removeFresaFiles.forEach((filename) => {
-    formData.append("remove_fresa_files", filename);
-  });
+  if (metadata && Object.prototype.hasOwnProperty.call(metadata, "operation_type")) {
+    formData.append("operation_type", metadata.operation_type || "");
+  }
 
-  return requestJson("/api/equipamentos", {
+  if (metadata && metadata.piece_quantities) {
+    formData.append("piece_quantities", JSON.stringify(metadata.piece_quantities));
+  }
+
+  if (metadata && metadata.upload_piece_quantities) {
+    formData.append("upload_piece_quantities", JSON.stringify(metadata.upload_piece_quantities));
+  }
+
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/pdfs`, {
     method: "POST",
     body: formData,
   });
 }
 
-export async function startProduction(equipmentName) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/iniciar`, {
+export async function getScreenVisualization(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/visualizacao`);
+}
+
+export async function startScreenProduction(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/iniciar`, {
     method: "POST",
   });
 }
 
-export async function finishCurrentPiece(equipmentName) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/finalizar`, {
-    method: "POST",
-  });
-}
-
-export async function getCurrentProduction() {
-  return requestJson("/api/producao/atual");
-}
-
-export async function finishCurrentProduction() {
-  return requestJson("/api/producao/finalizar", {
-    method: "POST",
-  });
-}
-
-export async function decideFresa(equipmentName, proceed) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/decidir-fresa`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ proceed }),
-  });
-}
-
-export async function resetProductionTracking(equipmentName) {
-  return requestJson(`/api/equipamentos/${encodeURIComponent(equipmentName)}/reset-producao`, {
+export async function finishScreenPiece(screenId) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/finalizar`, {
     method: "POST",
   });
 }

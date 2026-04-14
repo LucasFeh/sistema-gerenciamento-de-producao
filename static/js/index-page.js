@@ -1,46 +1,55 @@
+import { getScreenDetail } from "./api.js";
+import { loadScreenList, renderScreenInfo } from "./dashboard.js";
 import { createModalController } from "./modal.js";
-import { loadEquipmentList, renderEquipmentInfo } from "./dashboard.js";
-import { getEquipmentDetail } from "./api.js";
 
-let modalController = null;
-let selectedEquipmentName = "";
+let selectedScreenId = 1;
 let isRefreshing = false;
-const PRODUCTION_EVENTS_CHANNEL = "production-events";
+let modalController = null;
 
 function renderDefaultPanel() {
   const panel = document.getElementById("equip-info");
   panel.innerHTML = `
-    <h1>Painel de Producao</h1>
-    <p>Selecione um equipamento para ver as informacoes e iniciar a producao.</p>
+    <h1>Painel de Telas</h1>
+    <p>Selecione uma tela no menu lateral para configurar nome e PDFs.</p>
   `;
 }
 
 function renderDetail(detail) {
-  renderEquipmentInfo(detail, (equipmentName) => {
-    modalController.openForEquipment(equipmentName);
-  }, async (equipmentName) => {
-    selectedEquipmentName = equipmentName;
+  renderScreenInfo(detail, (screenId) => {
+    modalController.openForScreen(screenId);
+  }, async (screenId) => {
+    selectedScreenId = Number(screenId);
     await refreshAll();
   });
 }
 
 async function refreshList() {
-  await loadEquipmentList((detail) => {
-    selectedEquipmentName = detail.name;
+  const screens = await loadScreenList(selectedScreenId, (detail) => {
+    selectedScreenId = Number(detail.id);
     renderDetail(detail);
   });
+
+  if (!screens || screens.length === 0) {
+    renderDefaultPanel();
+    return;
+  }
+
+  const exists = screens.some((screen) => Number(screen.id) === Number(selectedScreenId));
+  if (!exists) {
+    selectedScreenId = Number(screens[0].id);
+  }
 }
 
-async function refreshSelectedEquipment() {
-  if (!selectedEquipmentName) {
+async function refreshSelectedScreen() {
+  if (!selectedScreenId) {
     return;
   }
 
   try {
-    const detail = await getEquipmentDetail(selectedEquipmentName);
+    const detail = await getScreenDetail(selectedScreenId);
     renderDetail(detail);
   } catch (error) {
-    selectedEquipmentName = "";
+    selectedScreenId = 0;
     renderDefaultPanel();
   }
 }
@@ -53,77 +62,20 @@ async function refreshAll() {
   isRefreshing = true;
   try {
     await refreshList();
-    await refreshSelectedEquipment();
+    await refreshSelectedScreen();
   } finally {
     isRefreshing = false;
   }
 }
 
-function subscribeToProductionNotifications() {
-  if ("EventSource" in window) {
-    const source = new EventSource("/api/eventos/producao");
-    source.addEventListener("production-updated", async function (event) {
-      let payload = {};
-      try {
-        payload = JSON.parse(event.data || "{}");
-      } catch (error) {
-        payload = {};
-      }
-
-      if (payload.equipmentName) {
-        selectedEquipmentName = payload.equipmentName;
-      }
-
-      await refreshAll();
-    });
-  }
-
-  if ("BroadcastChannel" in window) {
-    const channel = new BroadcastChannel(PRODUCTION_EVENTS_CHANNEL);
-    channel.onmessage = async function (event) {
-      const payload = event.data || {};
-      if (payload.type !== "production-finished") {
-        return;
-      }
-
-      if (payload.equipmentName) {
-        selectedEquipmentName = payload.equipmentName;
-      }
-
-      await refreshAll();
-    };
-  }
-
-  window.addEventListener("storage", async function (event) {
-    if (event.key !== "production-finished") {
-      return;
-    }
-
-    let payload = {};
-    try {
-      payload = JSON.parse(event.newValue || "{}");
-    } catch (error) {
-      payload = {};
-    }
-
-    if (payload.equipmentName) {
-      selectedEquipmentName = payload.equipmentName;
-    }
-
-    await refreshAll();
-  });
-}
-
-modalController = createModalController(async (payload) => {
-  await refreshAll();
-  if (payload && payload.deleted) {
-    renderDefaultPanel();
-    selectedEquipmentName = "";
-    return;
-  }
-  selectedEquipmentName = payload.name;
-  renderDetail(payload);
-});
-
 refreshAll();
-subscribeToProductionNotifications();
+
+modalController = createModalController(
+  () => selectedScreenId,
+  async (payload) => {
+    selectedScreenId = Number(payload.id);
+    await refreshAll();
+    const detail = await getScreenDetail(selectedScreenId);
+    renderDetail(detail);
+  }
+);

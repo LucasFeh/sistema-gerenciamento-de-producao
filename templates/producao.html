@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <title>Visualizacao de Producao</title>
 </head>
-<body>
+<body data-screen-id="{{ slot_id }}">
     <div class="producao_Page">
         <div id="producao-container" class="producao_Box">
             <h1>Aguardando producao</h1>

@@ -138,6 +138,11 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.list-item.active {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 .badge_Andamento {
   border-radius: 999px;
   background: #1d4ed8;
@@ -215,10 +220,125 @@ body {
   color: #57222f;
 }
 
+.pieceQueue_Block {
+  display: block;
+}
+
+.pieceQueue_Title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #57222f;
+}
+
 .barra_Bolinhas {
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
+}
+
+.pieceStatus_List {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pieceStatus_Item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #ecd9df;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.pieceStatus_Item.current {
+  border: 2px solid #1d4ed8;
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.2);
+}
+
+.pieceStatus_Item.done {
+  background: #f5fff8;
+}
+
+.pieceStatus_Label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pieceStatus_MainLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pieceStatus_Name {
+  color: #1f1216;
+  font-size: 15px;
+  font-weight: 800;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pieceStatus_Badge {
+  border: 1px solid #9ca3af;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4b5563;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.pieceStatus_Badge.current {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
+.pieceStatus_Badge.done {
+  border-color: #15803d;
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.responsavel_Box {
+  margin: 12px 0 10px;
+}
+
+.responsavel_Box label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4b3138;
+}
+
+.responsavel_Row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.responsavel_Row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #d9c2c9;
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+  background: #fff;
 }
 
 .dot {
@@ -247,6 +367,7 @@ body {
 
 .btn_IniciarProducao,
 .btn_BaixarRelatorio,
+.btn_SalvarResponsavel,
 .btn_FinalizarEtapa,
 .btn_AbrirVisualizacao,
 .btn_DecisionYes,
@@ -294,6 +415,17 @@ body {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
+}
+
+.btn_SalvarResponsavel {
+  border: 1px solid #d8bcc4;
+  background: #fff;
+  color: var(--primary);
+}
+
+.btn_SalvarResponsavel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn_AbrirVisualizacao {
@@ -412,6 +544,123 @@ body {
   margin: 0;
   font-size: 12px;
   color: #7b6a70;
+}
+
+.screenConfig_Box,
+.screenUpload_Box,
+.screenList_Box {
+  margin-top: 12px;
+  border: 1px solid #e8d5dc;
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.screenConfig_Box label,
+.screenUpload_Box label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4b3138;
+}
+
+.screenConfig_Row,
+.screenUpload_Row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.screenConfig_Row input[type="text"] {
+  flex: 1;
+  min-width: 220px;
+  border: 1px solid #d9c2c9;
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+  background: #fff;
+}
+
+.screenUpload_Row input[type="file"] {
+  flex: 1;
+  min-width: 240px;
+}
+
+.screenList_Box > p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4e2934;
+}
+
+.screenPdf_List {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.screenPdf_Item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #efdee3;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.screenPdf_Item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screenPdf_Empty {
+  border: 1px dashed #dfc7cf;
+  border-radius: 8px;
+  padding: 10px;
+  color: #7b6a70;
+  font-size: 13px;
+}
+
+.btn_RemovePdf {
+  border: 1px solid #e3c4cc;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.file_Tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.file_Tab {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: #fff;
+  border-radius: 0;
+  padding: 6px 10px;
+  font-family: "JetBrains Mono", monospace;
+  cursor: pointer;
+}
+
+.file_Tab.active {
+  background: #fff;
+  color: #000;
 }
 
 .modal_Overlay {
@@ -600,9 +849,41 @@ body {
   word-break: break-word;
 }
 
-.pdf_RemoveBtn {
+.pdf_QtyLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #4b3138;
+}
+
+.pdf_QtyInput {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d9c2c9;
+  border-radius: 8px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
+.pdf_CardFooter {
   margin-top: auto;
-  align-self: flex-end;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.pdf_QtyBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.pdf_RemoveBtn {
+  margin-top: 0;
+  align-self: auto;
   width: 24px;
   height: 24px;
   border: 1px solid #e3c4cc;
@@ -745,6 +1026,12 @@ body {
 
   .modal_Box {
     padding: 14px;
+  }
+
+  .screenConfig_Row input[type="text"],
+  .screenUpload_Row input[type="file"] {
+    min-width: 0;
+    width: 100%;
   }
 
   .producao_Header {

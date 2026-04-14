@@ -232,6 +232,58 @@ def build_piece_statuses(state, files, piece_quantities):
     return statuses
 
 
+def can_download_screen_report(state, piece_statuses):
+    if not state.get("production_started"):
+        return False
+    if state.get("active"):
+        return False
+    if not piece_statuses:
+        return False
+    return all(piece.get("status") == "done" for piece in piece_statuses)
+
+
+def report_lines_for_screen(slot_id):
+    snapshot = screen_snapshot(slot_id)
+    history = snapshot.get("piece_history", [])
+
+    lines = []
+    lines.append("Relatorio de Producao")
+    lines.append("")
+    lines.append(f"Tela: {snapshot.get('name', f'Tela {slot_id}')}")
+    lines.append(f"Responsavel: {snapshot.get('responsible', '') or 'Nao informado'}")
+    lines.append(f"Tipo de operacao: {snapshot.get('operation_type', '') or 'Nao informado'}")
+    lines.append(f"Total de pecas finalizadas: {len(history)}")
+    lines.append("")
+    lines.append("Historico por peca:")
+
+    if not history:
+        lines.append("- Nenhuma peca finalizada.")
+        return lines
+
+    for entry in history:
+        started = time.strftime("%H:%M:%S", time.localtime((entry.get("started_at_ms") or 0) / 1000))
+        ended = time.strftime("%H:%M:%S", time.localtime((entry.get("ended_at_ms") or 0) / 1000))
+        duration_total = max(0, int((entry.get("duration_ms") or 0) / 1000))
+        duration_min = duration_total // 60
+        duration_sec = duration_total % 60
+        duration_str = f"{duration_min:02}:{duration_sec:02}"
+        lines.append(
+            f"- {entry.get('piece_name', 'Peca')}: comecou {started} | terminou {ended} | tempo {duration_str}"
+        )
+
+    return lines
+
+
+def reset_screen_tracking(slot_id):
+    state = ensure_screen_runtime(slot_id)
+    state["active"] = False
+    state["production_started"] = False
+    state["index"] = 0
+    state["piece_started_at_ms"] = None
+    state["piece_history"] = []
+    state["queue"] = []
+
+
 def screen_snapshot(slot_id):
     config = read_screen_config()
     key = screen_key(slot_id)
@@ -240,6 +292,7 @@ def screen_snapshot(slot_id):
     state = ensure_screen_runtime(slot_id)
     current = current_screen_piece(slot_id)
     metadata = read_screen_metadata(slot_id)
+    piece_statuses = build_piece_statuses(state, files, metadata.get("piece_quantities", {}))
 
     return {
         "id": slot_id,
@@ -251,7 +304,8 @@ def screen_snapshot(slot_id):
         "production_started": state.get("production_started", False),
         "current": current,
         "piece_history": state.get("piece_history", []),
-        "piece_statuses": build_piece_statuses(state, files, metadata.get("piece_quantities", {})),
+        "piece_statuses": piece_statuses,
+        "report_available": can_download_screen_report(state, piece_statuses),
         "responsible": metadata.get("responsible", ""),
         "operation_type": metadata.get("operation_type", ""),
         "piece_quantities": metadata.get("piece_quantities", {}),
@@ -903,6 +957,38 @@ def get_screen_visualization(slot_id):
             "screen": snapshot,
             "current_file": current_file,
         }
+    )
+
+
+@app.route("/api/telas/<int:slot_id>/relatorio", methods=["GET"])
+def download_screen_report(slot_id):
+    if not valid_screen_slot(slot_id):
+        return jsonify({"error": "Tela nao encontrada."}), 404
+
+    snapshot = screen_snapshot(slot_id)
+    if not snapshot.get("report_available"):
+        return jsonify({"error": "Relatorio disponivel somente quando todas as pecas estiverem finalizadas."}), 400
+
+    lines = report_lines_for_screen(slot_id)
+    pdf_content = build_simple_pdf(lines)
+
+    reset_screen_tracking(slot_id)
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": "report-downloaded",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
+    filename = f"relatorio_tela_{slot_id}.pdf"
+    return Response(
+        pdf_content,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={secure_filename(filename)}",
+        },
     )
 
 

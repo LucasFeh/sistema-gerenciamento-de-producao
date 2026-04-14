@@ -95,6 +95,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   const history = screenData.piece_history || [];
   const current = screenData.current;
   const pieceStatuses = screenData.piece_statuses || [];
+  const reportEnabled = Boolean(screenData.report_available);
 
   panel.innerHTML = `
     <button id="edit-pdfs" class="btn_Engrenagem" title="Editar PDFs" aria-label="Editar PDFs">&#9881;</button>
@@ -106,6 +107,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
       <div class="screenUpload_Row">
         <button id="start-production" class="btn_IniciarProducao" type="button" ${screenData.active ? "disabled" : ""}>Iniciar Producao</button>
         <a class="btn_AbrirVisualizacao" href="/producao/${screenData.id}" target="_blank" rel="noopener">Abrir Visualizacao</a>
+        <button id="download-report" class="btn_BaixarRelatorio" type="button" ${reportEnabled ? "" : "disabled"}>Baixar relatorio</button>
       </div>
     </div>
 
@@ -150,6 +152,39 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
 
   document.getElementById("edit-pdfs").onclick = function () {
     onOpenModal(screenData.id);
+  };
+
+  document.getElementById("download-report").onclick = async function () {
+    if (!reportEnabled) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/telas/${encodeURIComponent(screenData.id)}/relatorio`);
+      if (!response.ok) {
+        let payload = {};
+        try {
+          payload = await response.json();
+        } catch (error) {
+          payload = {};
+        }
+        throw new Error(payload.error || "Erro ao baixar relatorio.");
+      }
+
+      const reportBlob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(reportBlob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = objectUrl;
+      downloadLink.download = `relatorio_tela_${screenData.id}.pdf`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      window.URL.revokeObjectURL(objectUrl);
+
+      await onChanged(screenData.id);
+    } catch (error) {
+      alert(error.message || "Erro ao baixar relatorio.");
+    }
   };
 }
 

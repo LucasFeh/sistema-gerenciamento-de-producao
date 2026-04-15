@@ -1,5 +1,6 @@
 import { getScreenDetail, updateScreenName, updateScreenPdfs } from "./api.js";
 
+// Cria e retorna o controlador do modal de configuração de tela, gerenciando uploads, remoções e edição de PDFs
 export function createModalController(getSelectedScreenId, onSaved) {
   const modal = document.getElementById("equipment-modal");
   const equipmentForm = document.getElementById("equipment-form");
@@ -23,15 +24,18 @@ export function createModalController(getSelectedScreenId, onSaved) {
   };
   const pieceQuantities = {};
 
+  // Retorna a quantidade de peças para um arquivo PDF
   function quantityFor(filename) {
     return Math.max(1, Number(pieceQuantities[filename] || 1));
   }
 
+  // Atualiza a quantidade de peças para um arquivo PDF
   function updateQuantity(filename, rawValue) {
     const parsed = Number(rawValue);
     pieceQuantities[filename] = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
   }
 
+  // Monta o objeto com as quantidades visíveis de peças para os arquivos existentes
   function buildVisiblePieceQuantities() {
     const payload = {};
 
@@ -44,6 +48,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
     return payload;
   }
 
+  // Monta o objeto com as quantidades de peças para os arquivos que serão enviados
   function buildUploadPieceQuantities() {
     const payload = {};
 
@@ -54,6 +59,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
     return payload;
   }
 
+  // Renderiza a visualização dos arquivos PDFs (existentes e novos) para um processo
   function renderPreview(processName) {
     const target = document.getElementById(`${processName}-preview`);
     target.innerHTML = "";
@@ -125,10 +131,12 @@ export function createModalController(getSelectedScreenId, onSaved) {
     });
   }
 
+  // Renderiza as visualizações de todos os processos (atualmente só "torno")
   function renderPreviews() {
     renderPreview("torno");
   }
 
+  // Adiciona arquivos PDF selecionados ao processo e atualiza a visualização
   function appendSelectedFiles(processName, fileList) {
     const incoming = Array.from(fileList || []).filter((file) => file.name.toLowerCase().endsWith(".pdf"));
     if (incoming.length === 0) {
@@ -143,6 +151,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
     renderPreview(processName);
   }
 
+  // Carrega os dados da tela selecionada para edição no modal
   async function loadScreenData(screenId) {
     if (!screenId) {
       existingFiles.torno = [];
@@ -175,11 +184,13 @@ export function createModalController(getSelectedScreenId, onSaved) {
     }
   }
 
+  // Exibe o modal de configuração de tela
   function openModal() {
     modal.classList.remove("hidden");
     renderPreviews();
   }
 
+  // Fecha o modal de configuração de tela
   function closeModal() {
     modal.classList.add("hidden");
   }

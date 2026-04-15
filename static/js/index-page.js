@@ -8,6 +8,7 @@ let modalController = null;
 const MANAGEMENT_SYNC_KEY = "screen-production-updated";
 const MANAGEMENT_SYNC_CHANNEL = "screen-production-sync";
 
+// Exibe o painel padrão quando nenhuma tela está selecionada
 function renderDefaultPanel() {
   const panel = document.getElementById("equip-info");
   panel.innerHTML = `
@@ -16,6 +17,7 @@ function renderDefaultPanel() {
   `;
 }
 
+// Renderiza os detalhes de uma tela específica, incluindo ações de abrir modal e atualizar seleção
 function renderDetail(detail) {
   renderScreenInfo(detail, (screenId) => {
     modalController.openForScreen(screenId);
@@ -25,6 +27,7 @@ function renderDetail(detail) {
   });
 }
 
+// Atualiza a lista de telas disponíveis e seleciona a tela ativa
 async function refreshList() {
   const screens = await loadScreenList(selectedScreenId, (detail) => {
     selectedScreenId = Number(detail.id);
@@ -42,6 +45,7 @@ async function refreshList() {
   }
 }
 
+// Atualiza os detalhes da tela atualmente selecionada
 async function refreshSelectedScreen() {
   if (!selectedScreenId) {
     return;
@@ -56,6 +60,7 @@ async function refreshSelectedScreen() {
   }
 }
 
+// Atualiza toda a interface: lista de telas e detalhes da tela selecionada
 async function refreshAll() {
   if (isRefreshing) {
     return;
@@ -70,6 +75,7 @@ async function refreshAll() {
   }
 }
 
+// Inscreve o frontend para receber atualizações de visualização via BroadcastChannel e storage events
 function subscribeToVisualizationUpdates() {
   const handlePayload = async (payload) => {
     if (!payload || payload.type !== "piece-finished") {
@@ -102,6 +108,7 @@ function subscribeToVisualizationUpdates() {
   });
 }
 
+// Inscreve o frontend para receber eventos de produção do backend via EventSource
 function subscribeToBackendProductionEvents() {
   if (!("EventSource" in window)) {
     return;

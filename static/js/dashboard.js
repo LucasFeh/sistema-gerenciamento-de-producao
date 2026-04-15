@@ -2,6 +2,7 @@ import { getScreenDetail, listScreens, startScreenProduction } from "./api.js";
 
 let pieceTimerInterval = null;
 
+// Formata uma duração em milissegundos para o formato HH:MM:SS ou MM:SS
 function formatDuration(durationMs) {
   const totalSeconds = Math.floor((durationMs || 0) / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -15,6 +16,7 @@ function formatDuration(durationMs) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+// Formata um timestamp em milissegundos para o formato de hora HH:MM:SS
 function formatClock(timestampMs) {
   if (!timestampMs) {
     return "--:--:--";
@@ -24,6 +26,7 @@ function formatClock(timestampMs) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
 }
 
+// Renderiza a lista de status das peças na fila de produção
 function renderPieceStatuses(pieceStatuses) {
   if (!pieceStatuses || pieceStatuses.length === 0) {
     return '<li class="screenPdf_Empty">Nenhuma peca na fila.</li>';
@@ -51,6 +54,7 @@ function renderPieceStatuses(pieceStatuses) {
     .join("");
 }
 
+// Renderiza o histórico de peças finalizadas
 function renderPieceHistory(history) {
   if (!history || history.length === 0) {
     return '<p class="history_Empty">Nenhuma peca finalizada ainda.</p>';
@@ -71,6 +75,7 @@ function renderPieceHistory(history) {
     .join("");
 }
 
+// Atualiza o timer da peça atual em produção, exibindo o tempo decorrido
 function bindCurrentPieceTimer(initialElapsedMs, paused) {
   if (pieceTimerInterval) {
     clearInterval(pieceTimerInterval);
@@ -99,6 +104,7 @@ function bindCurrentPieceTimer(initialElapsedMs, paused) {
   pieceTimerInterval = window.setInterval(updateTimer, 1000);
 }
 
+// Renderiza as informações da tela selecionada, incluindo status, fila, histórico e ações
 export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   const panel = document.getElementById("equip-info");
   const history = screenData.piece_history || [];
@@ -197,6 +203,7 @@ export function renderScreenInfo(screenData, onOpenModal, onChanged) {
   };
 }
 
+// Carrega e renderiza a lista de telas disponíveis no menu lateral
 export async function loadScreenList(selectedScreenId, onSelectScreen) {
   const listElement = document.getElementById("equip-list");
   listElement.innerHTML = "";

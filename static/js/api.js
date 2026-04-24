@@ -52,6 +52,10 @@ export async function updateScreenPdfs(screenId, files = [], removeFiles = [], m
     formData.append("operation_type", metadata.operation_type || "");
   }
 
+  if (metadata && Object.prototype.hasOwnProperty.call(metadata, "equipment_machine")) {
+    formData.append("equipment_machine", metadata.equipment_machine || "");
+  }
+
   if (metadata && metadata.piece_quantities) {
     formData.append("piece_quantities", JSON.stringify(metadata.piece_quantities));
   }

@@ -11,6 +11,19 @@
 </head>
 <body data-screen-id="{{ slot_id }}">
     <div class="producao_Page">
+        <button id="btn-menu-info" class="btn_MenuInfo" type="button" aria-label="Ver resumo da producao">
+            <span></span><span></span><span></span>
+        </button>
+
+        <div id="info-drawer" class="info_Drawer hidden" aria-hidden="true">
+            <div class="info_Drawer_Header">
+                <h3>Resumo da Producao</h3>
+                <button id="btn-close-drawer" class="btn_CloseDrawer" type="button">&#x2715;</button>
+            </div>
+            <div id="info-drawer-content" class="info_Drawer_Content"></div>
+        </div>
+        <div id="info-drawer-backdrop" class="info_Drawer_Backdrop hidden"></div>
+
         <div id="producao-container" class="producao_Box">
             <h1>Aguardando producao</h1>
             <p>Quando houver uma producao em andamento, o PDF atual aparecera aqui.</p>

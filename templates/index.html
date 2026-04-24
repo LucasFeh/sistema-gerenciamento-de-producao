@@ -40,17 +40,23 @@
             </div>
 
             <form id="equipment-form" class="form_Equipamento">
-                <label for="equipment-name">Nome da Tela</label>
-                <input id="equipment-name" name="name" type="text" required />
-
-                <label for="responsible-name">Nome do responsavel</label>
-                <input id="responsible-name" name="responsible" type="text" />
-
-                <label for="operation-type">Tipo de operacao</label>
-                <input id="operation-type" name="operation_type" type="text" />
-
-                <div class="tabs_Header">
-                    <button type="button" class="tab_Btn active" data-tab="torno">PDFs</button>
+                <div class="form_Fields_Grid">
+                    <div class="form_Field">
+                        <label for="equipment-name">Nome da Tela</label>
+                        <input id="equipment-name" name="name" type="text" required />
+                    </div>
+                    <div class="form_Field">
+                        <label for="responsible-name">Responsavel</label>
+                        <input id="responsible-name" name="responsible" type="text" />
+                    </div>
+                    <div class="form_Field">
+                        <label for="operation-type">Tipo de operacao</label>
+                        <input id="operation-type" name="operation_type" type="text" />
+                    </div>
+                    <div class="form_Field">
+                        <label for="equipment-machine">Nome do equipamento</label>
+                        <input id="equipment-machine" name="equipment_machine" type="text" />
+                    </div>
                 </div>
 
                 <div id="tab-torno" class="tab_Panel active">

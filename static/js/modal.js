@@ -7,6 +7,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
   const nameInput = document.getElementById("equipment-name");
   const responsibleInput = document.getElementById("responsible-name");
   const operationTypeInput = document.getElementById("operation-type");
+  const equipmentMachineInput = document.getElementById("equipment-machine");
   const tornoInput = document.getElementById("torno-pdfs");
   const feedback = document.getElementById("form-feedback");
   const openModalButton = document.getElementById("open-modal");
@@ -236,6 +237,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       nameInput.value = payload.name || "";
       responsibleInput.value = payload.responsible || "";
       operationTypeInput.value = payload.operation_type || "";
+      if (equipmentMachineInput) equipmentMachineInput.value = payload.equipment_machine || "";
       existingFiles.torno = payload.pdf_files || [];
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
@@ -252,6 +254,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       existingFiles.torno = [];
       responsibleInput.value = "";
       operationTypeInput.value = "";
+      if (equipmentMachineInput) equipmentMachineInput.value = "";
       removedFiles.torno = new Set();
       renderPreviews();
     }
@@ -365,6 +368,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
         {
           responsible: responsibleInput.value.trim(),
           operation_type: operationTypeInput.value.trim(),
+          equipment_machine: equipmentMachineInput ? equipmentMachineInput.value.trim() : "",
           piece_quantities: buildVisiblePieceQuantities(),
           upload_piece_quantities: buildUploadPieceQuantities(),
           pdf_order: [...pdfOrder.torno],

@@ -3,6 +3,79 @@ import { finishScreenPiece, getScreenDetail, toggleScreenPause, confirmScreenPro
 const container = document.getElementById("producao-container");
 const body = document.body;
 const screenId = Number(body.dataset.screenId || 1);
+const drawerBtn = document.getElementById("btn-menu-info");
+const drawer = document.getElementById("info-drawer");
+const drawerContent = document.getElementById("info-drawer-content");
+const drawerBackdrop = document.getElementById("info-drawer-backdrop");
+const drawerCloseBtn = document.getElementById("btn-close-drawer");
+
+let lastScreenSnapshot = null;
+
+function openDrawer() {
+  drawer.classList.remove("hidden");
+  drawerBackdrop.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden", "false");
+  populateDrawer();
+}
+
+function closeDrawer() {
+  drawer.classList.add("hidden");
+  drawerBackdrop.classList.add("hidden");
+  drawer.setAttribute("aria-hidden", "true");
+}
+
+function setDrawerButtonVisible(visible) {
+  if (!drawerBtn) {
+    return;
+  }
+
+  if (visible) {
+    drawerBtn.classList.remove("hidden");
+    return;
+  }
+
+  drawerBtn.classList.add("hidden");
+  closeDrawer();
+}
+
+function populateDrawer() {
+  const screen = lastScreenSnapshot;
+  if (!screen) {
+    drawerContent.innerHTML = "<p>Carregando...</p>";
+    return;
+  }
+
+  const machineName = screen.equipment_machine || "Nao informado";
+  const pieces = screen.piece_statuses || [];
+
+  const rows = pieces.map((p) => {
+    const statusLabel = { done: "Concluido", current: "Em andamento", pending: "Pendente", waiting_confirmation: "Aguardando" }[p.status] || p.status;
+    const name = (p.filename || "").replace(/\.pdf$/i, "");
+    return `
+      <div class="drawer_PieceRow drawer_PieceRow--${p.status}">
+        <span class="drawer_PieceNum">${p.piece_number}</span>
+        <span class="drawer_PieceName">${name}</span>
+        <span class="drawer_PieceQty">x${p.quantity}</span>
+        <span class="drawer_PieceStatus">${statusLabel}</span>
+      </div>`;
+  }).join("");
+
+  drawerContent.innerHTML = `
+    <div class="drawer_Section">
+      <p class="drawer_Label">Equipamento</p>
+      <p class="drawer_Value">${machineName}</p>
+    </div>
+    <div class="drawer_Section">
+      <p class="drawer_Label">Pecas (${pieces.length})</p>
+      <div class="drawer_PieceList">${rows || "<p>Sem pecas cadastradas.</p>"}</div>
+    </div>
+  `;
+}
+
+if (drawerBtn) drawerBtn.addEventListener("click", openDrawer);
+if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", closeDrawer);
+if (drawerBackdrop) drawerBackdrop.addEventListener("click", closeDrawer);
+
 const MANAGEMENT_SYNC_KEY = "screen-production-updated";
 const MANAGEMENT_SYNC_CHANNEL = "screen-production-sync";
 let renderKey = "";
@@ -67,6 +140,7 @@ function buildPdfUrl(filename) {
 }
 
 function renderWaitingState(screen) {
+  setDrawerButtonVisible(false);
   container.innerHTML = `
     <div class="producao_Header">
       <h1>${screen.name}</h1>
@@ -77,6 +151,7 @@ function renderWaitingState(screen) {
 }
 
 function renderWaitingConfirmation(screen) {
+  setDrawerButtonVisible(true);
   container.innerHTML = `
     <div class="producao_Header">
       <h1>${screen.name}</h1>
@@ -103,6 +178,7 @@ function renderWaitingConfirmation(screen) {
 }
 
 function renderFinishedState(screen) {
+  setDrawerButtonVisible(false);
   container.innerHTML = `
     <div class="producao_Header">
       <h1>${screen.name}</h1>
@@ -113,6 +189,7 @@ function renderFinishedState(screen) {
 }
 
 function renderActiveState(screen) {
+  setDrawerButtonVisible(false);
   const current = screen.current;
   const pieceTitle = (current.piece_name || current.filename || "Peca").replace(/\.pdf$/i, "");
   const elapsedMs = Number(current.elapsed_ms || 0);
@@ -203,6 +280,7 @@ function renderActiveState(screen) {
 async function refreshViewer() {
   try {
     const screen = await getScreenDetail(screenId);
+    lastScreenSnapshot = screen;
 
     if (!screen.production_started) {
       if (renderKey !== "waiting") {

@@ -82,6 +82,7 @@ def read_screen_metadata(slot_id):
     default_payload = {
         "responsible": "",
         "operation_type": "",
+        "equipment_machine": "",
         "piece_quantities": {},
         "pdf_order": [],
     }
@@ -111,15 +112,17 @@ def read_screen_metadata(slot_id):
     return {
         "responsible": normalize_responsible(payload.get("responsible", "")),
         "operation_type": normalize_equipment_name(str(payload.get("operation_type", ""))),
+        "equipment_machine": normalize_equipment_name(str(payload.get("equipment_machine", ""))),
         "piece_quantities": normalized_quantities,
         "pdf_order": pdf_order,
     }
 
 
-def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities, pdf_order=None):
+def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities, pdf_order=None, equipment_machine=None):
     payload = {
         "responsible": normalize_responsible(responsible),
         "operation_type": normalize_equipment_name(str(operation_type or "")),
+        "equipment_machine": normalize_equipment_name(str(equipment_machine or "")),
         "piece_quantities": {
             str(filename): normalize_piece_quantity(quantity)
             for filename, quantity in (piece_quantities or {}).items()
@@ -342,6 +345,7 @@ def screen_snapshot(slot_id):
         "report_available": can_download_screen_report(state, piece_statuses),
         "responsible": metadata.get("responsible", ""),
         "operation_type": metadata.get("operation_type", ""),
+        "equipment_machine": metadata.get("equipment_machine", ""),
         "piece_quantities": metadata.get("piece_quantities", {}),
         "pdf_order": metadata.get("pdf_order", []),
     }
@@ -920,6 +924,7 @@ def update_screen_pdfs(slot_id):
 
     responsible_name = request.form.get("responsible", metadata.get("responsible", ""))
     operation_type = request.form.get("operation_type", metadata.get("operation_type", ""))
+    equipment_machine = request.form.get("equipment_machine", metadata.get("equipment_machine", ""))
 
     incoming_quantities = {}
     incoming_quantities_raw = request.form.get("piece_quantities", "")
@@ -986,7 +991,7 @@ def update_screen_pdfs(slot_id):
     else:
         pdf_order = []
 
-    write_screen_metadata(slot_id, responsible_name, operation_type, piece_quantities, pdf_order)
+    write_screen_metadata(slot_id, responsible_name, operation_type, piece_quantities, pdf_order, equipment_machine)
 
     return jsonify(screen_snapshot(slot_id))
 

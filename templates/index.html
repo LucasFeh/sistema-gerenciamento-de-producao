@@ -54,10 +54,13 @@
                 </div>
 
                 <div id="tab-torno" class="tab_Panel active">
-                    <div class="upload_Row">
-                        <span>Adicionar PDFs da Tela</span>
-                        <label for="torno-pdfs" class="upload_Plus" title="Adicionar PDF">+</label>
+                    <div id="torno-dropzone" class="pdf_DropZone">
                         <input id="torno-pdfs" name="torno_pdfs" type="file" accept="application/pdf" multiple class="hidden_FileInput" />
+                        <div class="pdf_DropZone_Content">
+                            <span class="pdf_DropZone_Icon">&#128196;</span>
+                            <p class="pdf_DropZone_Text">Arraste PDFs aqui ou <label for="torno-pdfs" class="pdf_DropZone_Link">clique para selecionar</label></p>
+                            <p class="pdf_DropZone_Sub">Somente arquivos .pdf</p>
+                        </div>
                     </div>
                     <div id="torno-preview" class="pdf_PreviewGrid"></div>
                 </div>

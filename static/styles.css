@@ -820,6 +820,56 @@ body {
   display: none;
 }
 
+.pdf_DropZone {
+  border: 2px dashed var(--primary);
+  border-radius: 12px;
+  background: #fff6f8;
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  margin-bottom: 12px;
+}
+
+.pdf_DropZone.dragover {
+  background: #ffe0e8;
+  border-color: var(--primary-dark);
+}
+
+.pdf_DropZone_Content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.pdf_DropZone_Icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.pdf_DropZone_Text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4c3038;
+  pointer-events: auto;
+}
+
+.pdf_DropZone_Link {
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pdf_DropZone_Sub {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .pdf_PreviewGrid {
   min-height: 180px;
   display: grid;

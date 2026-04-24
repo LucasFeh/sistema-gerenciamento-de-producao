@@ -240,6 +240,28 @@ export function createModalController(getSelectedScreenId, onSaved) {
     tornoInput.value = "";
   });
 
+  // Drag-and-drop na zona de upload
+  const tornoDropzone = document.getElementById("torno-dropzone");
+  if (tornoDropzone) {
+    tornoDropzone.addEventListener("dragover", function (event) {
+      event.preventDefault();
+      tornoDropzone.classList.add("dragover");
+    });
+
+    tornoDropzone.addEventListener("dragleave", function (event) {
+      if (!tornoDropzone.contains(event.relatedTarget)) {
+        tornoDropzone.classList.remove("dragover");
+      }
+    });
+
+    tornoDropzone.addEventListener("drop", function (event) {
+      event.preventDefault();
+      tornoDropzone.classList.remove("dragover");
+      const files = event.dataTransfer.files;
+      appendSelectedFiles("torno", files);
+    });
+  }
+
   equipmentForm.onsubmit = async function (event) {
     event.preventDefault();
 

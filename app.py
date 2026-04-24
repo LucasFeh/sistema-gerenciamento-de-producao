@@ -83,6 +83,7 @@ def read_screen_metadata(slot_id):
         "responsible": "",
         "operation_type": "",
         "piece_quantities": {},
+        "pdf_order": [],
     }
 
     metadata_path = screen_metadata_file(slot_id)
@@ -104,14 +105,18 @@ def read_screen_metadata(slot_id):
         if str(filename).lower().endswith(".pdf")
     }
 
+    raw_order = payload.get("pdf_order", [])
+    pdf_order = [str(f) for f in raw_order if str(f).lower().endswith(".pdf")] if isinstance(raw_order, list) else []
+
     return {
         "responsible": normalize_responsible(payload.get("responsible", "")),
         "operation_type": normalize_equipment_name(str(payload.get("operation_type", ""))),
         "piece_quantities": normalized_quantities,
+        "pdf_order": pdf_order,
     }
 
 
-def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities):
+def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities, pdf_order=None):
     payload = {
         "responsible": normalize_responsible(responsible),
         "operation_type": normalize_equipment_name(str(operation_type or "")),
@@ -120,6 +125,7 @@ def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities
             for filename, quantity in (piece_quantities or {}).items()
             if str(filename).lower().endswith(".pdf")
         },
+        "pdf_order": [str(f) for f in (pdf_order or []) if str(f).lower().endswith(".pdf")],
     }
 
     screen_metadata_file(slot_id).write_text(json.dumps(payload, ensure_ascii=True), encoding="utf-8")
@@ -127,8 +133,12 @@ def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities
 
 def list_screen_pdfs(slot_id):
     directory = screen_dir(slot_id)
-    files = [p.name for p in directory.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
-    return sorted(files, key=str.lower)
+    files = {p.name for p in directory.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"}
+    metadata = read_screen_metadata(slot_id)
+    order = metadata.get("pdf_order", [])
+    ordered = [f for f in order if f in files]
+    remaining = sorted(files - set(ordered), key=str.lower)
+    return ordered + remaining
 
 
 def ensure_unique_filename(directory, filename):
@@ -333,6 +343,7 @@ def screen_snapshot(slot_id):
         "responsible": metadata.get("responsible", ""),
         "operation_type": metadata.get("operation_type", ""),
         "piece_quantities": metadata.get("piece_quantities", {}),
+        "pdf_order": metadata.get("pdf_order", []),
     }
 
 
@@ -930,6 +941,16 @@ def update_screen_pdfs(slot_id):
         except Exception:
             upload_quantities = {}
 
+    incoming_order = []
+    incoming_order_raw = request.form.get("pdf_order", "")
+    if incoming_order_raw:
+        try:
+            payload = json.loads(incoming_order_raw)
+            if isinstance(payload, list):
+                incoming_order = [str(f) for f in payload if str(f).lower().endswith(".pdf")]
+        except Exception:
+            incoming_order = []
+
     removed_files = delete_screen_pdfs(slot_id, request.form.getlist("remove_files"))
     added_files, added_quantities = save_screen_pdfs(slot_id, request.files.getlist("pdfs"), upload_quantities)
     apply_screen_queue_updates(slot_id, added_files, removed_files)
@@ -947,14 +968,25 @@ def update_screen_pdfs(slot_id):
     for added in added_files:
         piece_quantities[added] = normalize_piece_quantity(added_quantities.get(added, 1))
 
-    current_files = set(list_screen_pdfs(slot_id))
+    current_files_set = set(list_screen_pdfs(slot_id))
     piece_quantities = {
         filename: quantity
         for filename, quantity in piece_quantities.items()
-        if filename in current_files
+        if filename in current_files_set
     }
 
-    write_screen_metadata(slot_id, responsible_name, operation_type, piece_quantities)
+    # Build final order: use incoming_order as base, append new files at end, drop removed
+    removed_set = set(removed_files)
+    # Map old names to saved names for newly added files — added_files are already final names
+    if incoming_order:
+        pdf_order = [f for f in incoming_order if f not in removed_set and f in current_files_set]
+        for added in added_files:
+            if added not in pdf_order:
+                pdf_order.append(added)
+    else:
+        pdf_order = []
+
+    write_screen_metadata(slot_id, responsible_name, operation_type, piece_quantities, pdf_order)
 
     return jsonify(screen_snapshot(slot_id))
 

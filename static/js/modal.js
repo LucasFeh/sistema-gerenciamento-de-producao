@@ -24,6 +24,49 @@ export function createModalController(getSelectedScreenId, onSaved) {
   };
   const pieceQuantities = {};
 
+  // Ordem manual dos PDFs (nomes dos arquivos na sequência desejada)
+  const pdfOrder = {
+    torno: [],
+  };
+
+  // Reconstrói pdfOrder[processName] a partir dos arrays visíveis
+  function rebuildOrder(processName) {
+    const visibleExisting = existingFiles[processName].filter(
+      (f) => !removedFiles[processName].has(f)
+    );
+    const existingSet = new Set(visibleExisting);
+    const selectedNames = selectedUploads[processName].map((f) => f.name);
+
+    // Mantém a ordem já definida, remove o que foi deletado, adiciona novos ao final
+    const current = pdfOrder[processName].filter(
+      (f) => existingSet.has(f) || selectedNames.includes(f)
+    );
+    const inOrder = new Set(current);
+    for (const f of visibleExisting) {
+      if (!inOrder.has(f)) current.push(f);
+    }
+    for (const name of selectedNames) {
+      if (!inOrder.has(name)) current.push(name);
+    }
+    pdfOrder[processName] = current;
+  }
+
+  // Retorna os itens na ordem definida pelo usuário
+  function orderedItems(processName) {
+    rebuildOrder(processName);
+    const existingSet = new Set(
+      existingFiles[processName].filter((f) => !removedFiles[processName].has(f))
+    );
+    const selectedMap = new Map(
+      selectedUploads[processName].map((f) => [f.name, f])
+    );
+    return pdfOrder[processName].map((name) => {
+      if (existingSet.has(name)) return { type: "existing", name };
+      if (selectedMap.has(name)) return { type: "selected", file: selectedMap.get(name) };
+      return null;
+    }).filter(Boolean);
+  }
+
   // Retorna a quantidade de peças para um arquivo PDF
   function quantityFor(filename) {
     return Math.max(1, Number(pieceQuantities[filename] || 1));
@@ -64,10 +107,9 @@ export function createModalController(getSelectedScreenId, onSaved) {
     const target = document.getElementById(`${processName}-preview`);
     target.innerHTML = "";
 
-    const visibleExisting = existingFiles[processName].filter((filename) => !removedFiles[processName].has(filename));
-    const visibleSelected = selectedUploads[processName];
+    const items = orderedItems(processName);
 
-    if (visibleExisting.length === 0 && visibleSelected.length === 0) {
+    if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "pdf_EmptyBox";
       empty.textContent = "Sem PDFs";
@@ -75,57 +117,85 @@ export function createModalController(getSelectedScreenId, onSaved) {
       return;
     }
 
-    visibleExisting.forEach((filename) => {
+    let dragSrc = null;
+
+    items.forEach((item) => {
       const card = document.createElement("div");
-      card.className = "pdf_Card existing";
+      const isExisting = item.type === "existing";
+      const name = isExisting ? item.name : item.file.name;
+      card.className = "pdf_Card " + (isExisting ? "existing" : "selected") + " pdf_Draggable";
+      card.draggable = true;
+      card.dataset.name = name;
       card.innerHTML = `
-        <span class="pdf_Tag">PDF</span>
-        <p title="${filename}">${filename}</p>
+        <div class="pdf_DragHandle" title="Arrastar para reordenar">&#9776;</div>
+        <span class="pdf_Tag">${isExisting ? "PDF" : "NOVO"}</span>
+        <p title="${name}">${name}</p>
         <div class="pdf_CardFooter">
           <div class="pdf_QtyBox">
             <label class="pdf_QtyLabel">Qtd</label>
-            <input type="number" min="1" step="1" class="pdf_QtyInput" value="${quantityFor(filename)}" />
+            <input type="number" min="1" step="1" class="pdf_QtyInput" value="${quantityFor(name)}" />
           </div>
-          <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${filename}">x</button>
+          <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${name}">x</button>
         </div>
       `;
 
       card.querySelector(".pdf_QtyInput").oninput = function (event) {
-        updateQuantity(filename, event.target.value);
+        updateQuantity(name, event.target.value);
       };
 
-      card.querySelector(".pdf_RemoveBtn").onclick = function () {
-        removedFiles[processName].add(filename);
+      if (isExisting) {
+        card.querySelector(".pdf_RemoveBtn").onclick = function () {
+          removedFiles[processName].add(name);
+          renderPreview(processName);
+        };
+      } else {
+        card.querySelector(".pdf_RemoveBtn").onclick = function () {
+          delete pieceQuantities[name];
+          selectedUploads[processName] = selectedUploads[processName].filter((f) => f.name !== name);
+          renderPreview(processName);
+        };
+      }
+
+      // Drag-and-drop para reordenar
+      card.addEventListener("dragstart", function (e) {
+        dragSrc = card;
+        card.classList.add("pdf_Dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+
+      card.addEventListener("dragend", function () {
+        card.classList.remove("pdf_Dragging");
+        target.querySelectorAll(".pdf_Card").forEach((c) => c.classList.remove("pdf_DragOver"));
+      });
+
+      card.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (dragSrc && dragSrc !== card) {
+          target.querySelectorAll(".pdf_Card").forEach((c) => c.classList.remove("pdf_DragOver"));
+          card.classList.add("pdf_DragOver");
+        }
+      });
+
+      card.addEventListener("dragleave", function () {
+        card.classList.remove("pdf_DragOver");
+      });
+
+      card.addEventListener("drop", function (e) {
+        e.preventDefault();
+        card.classList.remove("pdf_DragOver");
+        if (!dragSrc || dragSrc === card) return;
+
+        const srcName = dragSrc.dataset.name;
+        const dstName = card.dataset.name;
+        const order = pdfOrder[processName];
+        const srcIdx = order.indexOf(srcName);
+        const dstIdx = order.indexOf(dstName);
+        if (srcIdx === -1 || dstIdx === -1) return;
+        order.splice(srcIdx, 1);
+        order.splice(dstIdx, 0, srcName);
         renderPreview(processName);
-      };
-
-      target.appendChild(card);
-    });
-
-    visibleSelected.forEach((file, index) => {
-      const card = document.createElement("div");
-      card.className = "pdf_Card selected";
-      card.innerHTML = `
-        <span class="pdf_Tag">NOVO</span>
-        <p title="${file.name}">${file.name}</p>
-        <div class="pdf_CardFooter">
-          <div class="pdf_QtyBox">
-            <label class="pdf_QtyLabel">Qtd</label>
-            <input type="number" min="1" step="1" class="pdf_QtyInput" value="${quantityFor(file.name)}" />
-          </div>
-          <button type="button" class="pdf_RemoveBtn" aria-label="Remover ${file.name}">x</button>
-        </div>
-      `;
-
-      card.querySelector(".pdf_QtyInput").oninput = function (event) {
-        updateQuantity(file.name, event.target.value);
-      };
-
-      card.querySelector(".pdf_RemoveBtn").onclick = function () {
-        delete pieceQuantities[file.name];
-        selectedUploads[processName].splice(index, 1);
-        renderPreview(processName);
-      };
+      });
 
       target.appendChild(card);
     });
@@ -174,6 +244,9 @@ export function createModalController(getSelectedScreenId, onSaved) {
         pieceQuantities[filename] = Number(payload.piece_quantities?.[filename] || 1);
       });
       removedFiles.torno = new Set();
+      pdfOrder.torno = Array.isArray(payload.pdf_order) && payload.pdf_order.length
+        ? [...payload.pdf_order]
+        : [...existingFiles.torno];
       renderPreviews();
     } catch (error) {
       existingFiles.torno = [];
@@ -201,6 +274,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       selectedUploads.torno = [];
       existingFiles.torno = [];
       removedFiles.torno = new Set();
+      pdfOrder.torno = [];
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
       });
@@ -293,6 +367,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
           operation_type: operationTypeInput.value.trim(),
           piece_quantities: buildVisiblePieceQuantities(),
           upload_piece_quantities: buildUploadPieceQuantities(),
+          pdf_order: [...pdfOrder.torno],
         }
       );
       if (feedback) {
@@ -304,6 +379,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       selectedUploads.torno = [];
       existingFiles.torno = [];
       removedFiles.torno = new Set();
+      pdfOrder.torno = [];
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
       });

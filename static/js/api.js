@@ -60,6 +60,10 @@ export async function updateScreenPdfs(screenId, files = [], removeFiles = [], m
     formData.append("upload_piece_quantities", JSON.stringify(metadata.upload_piece_quantities));
   }
 
+  if (metadata && Array.isArray(metadata.pdf_order)) {
+    formData.append("pdf_order", JSON.stringify(metadata.pdf_order));
+  }
+
   return requestJson(`/api/telas/${encodeURIComponent(screenId)}/pdfs`, {
     method: "POST",
     body: formData,

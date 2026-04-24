@@ -897,6 +897,33 @@ body {
   background: #f4fff9;
 }
 
+.pdf_Draggable {
+  cursor: grab;
+}
+
+.pdf_Draggable:active {
+  cursor: grabbing;
+}
+
+.pdf_Dragging {
+  opacity: 0.45;
+  border-style: dashed !important;
+}
+
+.pdf_DragOver {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.pdf_DragHandle {
+  font-size: 14px;
+  color: var(--muted);
+  cursor: grab;
+  align-self: flex-start;
+  line-height: 1;
+  user-select: none;
+}
+
 .pdf_Tag {
   width: fit-content;
   background: var(--primary-soft);

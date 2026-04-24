@@ -24,6 +24,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
     torno: new Set(),
   };
   const pieceQuantities = {};
+  let emergencyFilename = "";
 
   // Ordem manual dos PDFs (nomes dos arquivos na sequência desejada)
   const pdfOrder = {
@@ -124,12 +125,13 @@ export function createModalController(getSelectedScreenId, onSaved) {
       const card = document.createElement("div");
       const isExisting = item.type === "existing";
       const name = isExisting ? item.name : item.file.name;
-      card.className = "pdf_Card " + (isExisting ? "existing" : "selected") + " pdf_Draggable";
+      const emergencyClass = emergencyFilename === name ? " emergency" : "";
+      card.className = "pdf_Card " + (isExisting ? "existing" : "selected") + emergencyClass + " pdf_Draggable";
       card.draggable = true;
       card.dataset.name = name;
       card.innerHTML = `
         <div class="pdf_DragHandle" title="Arrastar para reordenar">&#9776;</div>
-        <span class="pdf_Tag">${isExisting ? "PDF" : "NOVO"}</span>
+        <span class="pdf_Tag">${emergencyFilename === name ? "EMERGENCIA" : (isExisting ? "PDF" : "NOVO")}</span>
         <p title="${name}">${name}</p>
         <div class="pdf_CardFooter">
           <div class="pdf_QtyBox">
@@ -140,17 +142,35 @@ export function createModalController(getSelectedScreenId, onSaved) {
         </div>
       `;
 
+      card.onclick = function (event) {
+        if (
+          event.target.closest(".pdf_RemoveBtn") ||
+          event.target.closest(".pdf_QtyInput") ||
+          event.target.closest(".pdf_DragHandle")
+        ) {
+          return;
+        }
+        emergencyFilename = emergencyFilename === name ? "" : name;
+        renderPreview(processName);
+      };
+
       card.querySelector(".pdf_QtyInput").oninput = function (event) {
         updateQuantity(name, event.target.value);
       };
 
       if (isExisting) {
         card.querySelector(".pdf_RemoveBtn").onclick = function () {
+          if (emergencyFilename === name) {
+            emergencyFilename = "";
+          }
           removedFiles[processName].add(name);
           renderPreview(processName);
         };
       } else {
         card.querySelector(".pdf_RemoveBtn").onclick = function () {
+          if (emergencyFilename === name) {
+            emergencyFilename = "";
+          }
           delete pieceQuantities[name];
           selectedUploads[processName] = selectedUploads[processName].filter((f) => f.name !== name);
           renderPreview(processName);
@@ -249,12 +269,14 @@ export function createModalController(getSelectedScreenId, onSaved) {
       pdfOrder.torno = Array.isArray(payload.pdf_order) && payload.pdf_order.length
         ? [...payload.pdf_order]
         : [...existingFiles.torno];
+      emergencyFilename = payload.emergency_filename || "";
       renderPreviews();
     } catch (error) {
       existingFiles.torno = [];
       responsibleInput.value = "";
       operationTypeInput.value = "";
       if (equipmentMachineInput) equipmentMachineInput.value = "";
+      emergencyFilename = "";
       removedFiles.torno = new Set();
       renderPreviews();
     }
@@ -278,6 +300,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       existingFiles.torno = [];
       removedFiles.torno = new Set();
       pdfOrder.torno = [];
+      emergencyFilename = "";
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
       });
@@ -369,6 +392,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
           responsible: responsibleInput.value.trim(),
           operation_type: operationTypeInput.value.trim(),
           equipment_machine: equipmentMachineInput ? equipmentMachineInput.value.trim() : "",
+          emergency_filename: emergencyFilename,
           piece_quantities: buildVisiblePieceQuantities(),
           upload_piece_quantities: buildUploadPieceQuantities(),
           pdf_order: [...pdfOrder.torno],
@@ -384,6 +408,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       existingFiles.torno = [];
       removedFiles.torno = new Set();
       pdfOrder.torno = [];
+      emergencyFilename = "";
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
       });
@@ -402,6 +427,7 @@ export function createModalController(getSelectedScreenId, onSaved) {
       activeScreenId = Number(screenId || getSelectedScreenId());
       selectedUploads.torno = [];
       removedFiles.torno = new Set();
+      emergencyFilename = "";
       Object.keys(pieceQuantities).forEach((key) => {
         delete pieceQuantities[key];
       });

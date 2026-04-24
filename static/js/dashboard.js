@@ -34,10 +34,10 @@ function renderPieceStatuses(pieceStatuses) {
 
   return pieceStatuses
     .map((piece) => {
-      const dotClass = piece.status === "done" ? "dot done" : piece.status === "current" ? "dot current" : piece.status === "waiting_confirmation" ? "dot waiting_confirmation" : "dot";
-      const itemClass = piece.status === "done" ? "pieceStatus_Item done" : piece.status === "current" ? "pieceStatus_Item current" : piece.status === "waiting_confirmation" ? "pieceStatus_Item waiting_confirmation" : "pieceStatus_Item";
-      const statusLabel = piece.status === "done" ? "FINALIZADO" : piece.status === "current" ? "EM PRODUCAO" : piece.status === "waiting_confirmation" ? "AGUARDANDO CONFIRMACAO" : "PENDENTE";
-      const statusClass = piece.status === "done" ? "pieceStatus_Badge done" : piece.status === "current" ? "pieceStatus_Badge current" : piece.status === "waiting_confirmation" ? "pieceStatus_Badge waiting_confirmation" : "pieceStatus_Badge";
+      const dotClass = piece.status === "done" ? "dot done" : piece.status === "current" ? "dot current" : piece.status === "emergency" ? "dot emergency" : piece.status === "paused_for_emergency" ? "dot paused_for_emergency" : piece.status === "waiting_confirmation" ? "dot waiting_confirmation" : "dot";
+      const itemClass = piece.status === "done" ? "pieceStatus_Item done" : piece.status === "current" ? "pieceStatus_Item current" : piece.status === "emergency" ? "pieceStatus_Item emergency" : piece.status === "paused_for_emergency" ? "pieceStatus_Item paused_for_emergency" : piece.status === "waiting_confirmation" ? "pieceStatus_Item waiting_confirmation" : "pieceStatus_Item";
+      const statusLabel = piece.status === "done" ? "FINALIZADO" : piece.status === "current" ? "EM PRODUCAO" : piece.status === "emergency" ? "EMERGENCIA" : piece.status === "paused_for_emergency" ? "PAUSADO" : piece.status === "waiting_confirmation" ? "AGUARDANDO CONFIRMACAO" : "PENDENTE";
+      const statusClass = piece.status === "done" ? "pieceStatus_Badge done" : piece.status === "current" ? "pieceStatus_Badge current" : piece.status === "emergency" ? "pieceStatus_Badge emergency" : piece.status === "paused_for_emergency" ? "pieceStatus_Badge paused_for_emergency" : piece.status === "waiting_confirmation" ? "pieceStatus_Badge waiting_confirmation" : "pieceStatus_Badge";
       const pieceName = (piece.filename || "").replace(/\.pdf$/i, "");
       return `
         <li class="${itemClass}">
@@ -62,9 +62,10 @@ function renderPieceHistory(history) {
 
   return history
     .map((entry) => {
+      const emergencyTag = entry.piece_type === "emergency" ? '<span class="history_EmergencyTag">PECA DE EMERGENCIA</span>' : "";
       return `
         <li class="history_Item">
-          <span class="history_CellName">${entry.piece_name || "-"}</span>
+          <span class="history_CellName">${entry.piece_name || "-"} ${emergencyTag}</span>
           <span>${entry.process || "-"}</span>
           <span>${formatClock(entry.started_at_ms)}</span>
           <span>${formatClock(entry.ended_at_ms)}</span>

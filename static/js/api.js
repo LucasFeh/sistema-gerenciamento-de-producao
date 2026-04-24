@@ -56,6 +56,10 @@ export async function updateScreenPdfs(screenId, files = [], removeFiles = [], m
     formData.append("equipment_machine", metadata.equipment_machine || "");
   }
 
+  if (metadata && Object.prototype.hasOwnProperty.call(metadata, "emergency_filename")) {
+    formData.append("emergency_filename", metadata.emergency_filename || "");
+  }
+
   if (metadata && metadata.piece_quantities) {
     formData.append("piece_quantities", JSON.stringify(metadata.piece_quantities));
   }
@@ -93,6 +97,16 @@ export async function confirmScreenProduction(screenId) {
 export async function finishScreenPiece(screenId) {
   return requestJson(`/api/telas/${encodeURIComponent(screenId)}/finalizar`, {
     method: "POST",
+  });
+}
+
+export async function startScreenEmergency(screenId, filename) {
+  return requestJson(`/api/telas/${encodeURIComponent(screenId)}/emergencia`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ filename: String(filename || "") }),
   });
 }
 

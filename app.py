@@ -85,6 +85,7 @@ def read_screen_metadata(slot_id):
         "equipment_machine": "",
         "piece_quantities": {},
         "pdf_order": [],
+        "emergency_filename": "",
     }
 
     metadata_path = screen_metadata_file(slot_id)
@@ -108,6 +109,9 @@ def read_screen_metadata(slot_id):
 
     raw_order = payload.get("pdf_order", [])
     pdf_order = [str(f) for f in raw_order if str(f).lower().endswith(".pdf")] if isinstance(raw_order, list) else []
+    emergency_filename = str(payload.get("emergency_filename", "") or "").strip()
+    if not emergency_filename.lower().endswith(".pdf"):
+        emergency_filename = ""
 
     return {
         "responsible": normalize_responsible(payload.get("responsible", "")),
@@ -115,10 +119,11 @@ def read_screen_metadata(slot_id):
         "equipment_machine": normalize_equipment_name(str(payload.get("equipment_machine", ""))),
         "piece_quantities": normalized_quantities,
         "pdf_order": pdf_order,
+        "emergency_filename": emergency_filename,
     }
 
 
-def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities, pdf_order=None, equipment_machine=None):
+def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities, pdf_order=None, equipment_machine=None, emergency_filename=None):
     payload = {
         "responsible": normalize_responsible(responsible),
         "operation_type": normalize_equipment_name(str(operation_type or "")),
@@ -129,6 +134,7 @@ def write_screen_metadata(slot_id, responsible, operation_type, piece_quantities
             if str(filename).lower().endswith(".pdf")
         },
         "pdf_order": [str(f) for f in (pdf_order or []) if str(f).lower().endswith(".pdf")],
+        "emergency_filename": str(emergency_filename or "") if str(emergency_filename or "").lower().endswith(".pdf") else "",
     }
 
     screen_metadata_file(slot_id).write_text(json.dumps(payload, ensure_ascii=True), encoding="utf-8")
@@ -220,18 +226,51 @@ def build_piece_statuses(state, files, piece_quantities):
 
     state["queue"] = queue
 
-    done_count = len(history)
+    done_count = int(state.get("index", 0))
     current_index = int(state.get("index", 0))
     active = bool(state.get("active", False))
     waiting_confirmation = bool(state.get("waiting_confirmation", False))
+    emergency_active = bool(state.get("emergency_active", False))
+    emergency_piece = state.get("emergency_piece", {})
 
     statuses = []
+
+    # Pecas que foram executadas em modo emergencia aparecem como finalizadas.
+    emergency_history = [entry for entry in history if entry.get("piece_type") == "emergency"]
+    for emergency_index, entry in enumerate(emergency_history, start=1):
+        emergency_filename = str(entry.get("filename") or "").strip()
+        if not emergency_filename.lower().endswith(".pdf"):
+            continue
+
+        statuses.append(
+            {
+                "piece_number": f"E{emergency_index}",
+                "piece_label": f"Peca de Emergencia {emergency_index}",
+                "filename": emergency_filename,
+                "quantity": normalize_piece_quantity(piece_quantities.get(emergency_filename, 1)),
+                "status": "done",
+            }
+        )
+
+    if emergency_active and emergency_piece.get("filename"):
+        statuses.append(
+            {
+                "piece_number": "E",
+                "piece_label": "Peca de Emergencia",
+                "filename": emergency_piece.get("filename"),
+                "quantity": normalize_piece_quantity(emergency_piece.get("quantity", 1)),
+                "status": "emergency",
+            }
+        )
+
     for index, filename in enumerate(queue):
         status = "pending"
         if index < done_count:
             status = "done"
-        elif waiting_confirmation and index == 0:
+        elif waiting_confirmation and index == 0 and not emergency_active:
             status = "waiting_confirmation"
+        elif emergency_active and index == current_index:
+            status = "paused_for_emergency"
         elif active and index == current_index:
             status = "current"
 
@@ -283,8 +322,9 @@ def report_lines_for_screen(slot_id):
         duration_min = duration_total // 60
         duration_sec = duration_total % 60
         duration_str = f"{duration_min:02}:{duration_sec:02}"
+        tag = " [PECA DE EMERGENCIA]" if entry.get("piece_type") == "emergency" else ""
         lines.append(
-            f"- {entry.get('piece_name', 'Peca')}: comecou {started} | terminou {ended} | tempo {duration_str}"
+            f"- {entry.get('piece_name', 'Peca')}{tag}: comecou {started} | terminou {ended} | tempo {duration_str}"
         )
 
     return lines
@@ -302,21 +342,33 @@ def reset_screen_tracking(slot_id):
     state["piece_started_at_ms"] = None
     state["piece_history"] = []
     state["queue"] = []
+    state["emergency_active"] = False
+    state["emergency_piece"] = {}
+    state["suspended_stack"] = []
 
 
-def current_elapsed_ms(state, now_ms=None):
-    started_at = state.get("piece_started_at_ms")
-    if not started_at:
+def elapsed_from_timing(started_at_ms, paused, paused_at_ms, paused_total_ms, now_ms=None):
+    if not started_at_ms:
         return 0
 
     now_value = int(now_ms if now_ms is not None else time.time() * 1000)
-    paused_total = int(state.get("paused_total_ms", 0))
+    paused_total = int(paused_total_ms or 0)
 
-    if state.get("paused"):
-        paused_at = int(state.get("paused_at_ms") or now_value)
-        return max(0, paused_at - int(started_at) - paused_total)
+    if paused:
+        paused_at = int(paused_at_ms or now_value)
+        return max(0, paused_at - int(started_at_ms) - paused_total)
 
-    return max(0, now_value - int(started_at) - paused_total)
+    return max(0, now_value - int(started_at_ms) - paused_total)
+
+
+def current_elapsed_ms(state, now_ms=None):
+    return elapsed_from_timing(
+        state.get("piece_started_at_ms"),
+        bool(state.get("paused")),
+        state.get("paused_at_ms"),
+        state.get("paused_total_ms", 0),
+        now_ms,
+    )
 
 
 def screen_snapshot(slot_id):
@@ -348,6 +400,7 @@ def screen_snapshot(slot_id):
         "equipment_machine": metadata.get("equipment_machine", ""),
         "piece_quantities": metadata.get("piece_quantities", {}),
         "pdf_order": metadata.get("pdf_order", []),
+        "emergency_filename": metadata.get("emergency_filename", ""),
     }
 
 
@@ -364,6 +417,9 @@ def ensure_screen_runtime(slot_id):
             "piece_started_at_ms": None,
             "piece_history": [],
             "queue": [],
+            "emergency_active": False,
+            "emergency_piece": {},
+            "suspended_stack": [],
         }
     return screen_runtime[slot_id]
 
@@ -419,6 +475,30 @@ def current_screen_piece(slot_id):
     if not state.get("active"):
         return None
 
+    if state.get("emergency_active"):
+        emergency_piece = state.get("emergency_piece", {})
+        filename = emergency_piece.get("filename")
+        if not filename:
+            return None
+
+        return {
+            "process": "Emergencia",
+            "filename": filename,
+            "piece_name": Path(filename).stem,
+            "index": 0,
+            "total": 1,
+            "quantity": normalize_piece_quantity(emergency_piece.get("quantity", 1)),
+            "started_at_ms": emergency_piece.get("started_at_ms"),
+            "elapsed_ms": elapsed_from_timing(
+                emergency_piece.get("started_at_ms"),
+                bool(emergency_piece.get("paused", False)),
+                emergency_piece.get("paused_at_ms"),
+                emergency_piece.get("paused_total_ms", 0),
+            ),
+            "paused": bool(emergency_piece.get("paused", False)),
+            "emergency": True,
+        }
+
     files = normalize_queue_entries(state.get("queue", []))
     if not files:
         files = normalize_queue_entries(list_screen_pdfs(slot_id))
@@ -462,7 +542,73 @@ def start_screen_production(slot_id):
     state["piece_started_at_ms"] = None
     state["piece_history"] = []
     state["queue"] = files
+    state["emergency_active"] = False
+    state["emergency_piece"] = {}
+    state["suspended_stack"] = []
+
     return state, "waiting"
+
+
+def start_screen_emergency(slot_id, filename):
+    state = ensure_screen_runtime(slot_id)
+    if not state.get("active") or state.get("waiting_confirmation"):
+        return state, "not-active"
+
+    safe_name = str(filename or "").strip()
+    if not safe_name.lower().endswith(".pdf"):
+        return state, "invalid-file"
+
+    available_files = set(normalize_queue_entries(list_screen_pdfs(slot_id)))
+    if safe_name not in available_files:
+        return state, "missing-file"
+
+    metadata = read_screen_metadata(slot_id)
+    now_ms = int(time.time() * 1000)
+
+    if state.get("emergency_active"):
+        suspended_entry = {
+            "kind": "emergency",
+            "piece": dict(state.get("emergency_piece", {})),
+        }
+    else:
+        queue = normalize_queue_entries(state.get("queue", []))
+        state["queue"] = queue
+        current_index = int(state.get("index", 0))
+        if current_index >= len(queue):
+            return state, "no-current"
+
+        # Remove a peca de emergencia da fila normal para nao duplicar no status.
+        if safe_name in queue:
+            removed_index = queue.index(safe_name)
+            queue.pop(removed_index)
+            if removed_index < current_index:
+                current_index = max(0, current_index - 1)
+            state["queue"] = queue
+            state["index"] = current_index
+
+        suspended_entry = {
+            "kind": "regular",
+            "index": current_index,
+            "piece_started_at_ms": state.get("piece_started_at_ms"),
+            "paused": bool(state.get("paused", False)),
+            "paused_at_ms": state.get("paused_at_ms"),
+            "paused_total_ms": int(state.get("paused_total_ms", 0)),
+        }
+
+    state.setdefault("suspended_stack", []).append(suspended_entry)
+    state["emergency_active"] = True
+    state["emergency_piece"] = {
+        "filename": safe_name,
+        "quantity": normalize_piece_quantity(metadata.get("piece_quantities", {}).get(safe_name, 1)),
+        "started_at_ms": now_ms,
+        "paused": False,
+        "paused_at_ms": None,
+        "paused_total_ms": 0,
+    }
+    state["paused"] = False
+    state["paused_at_ms"] = None
+    state["paused_total_ms"] = 0
+    return state, "emergency-started"
 
 
 def confirm_screen_production(slot_id):
@@ -482,12 +628,60 @@ def advance_screen_production(slot_id):
     state = ensure_screen_runtime(slot_id)
     if not state.get("active"):
         return "not-active"
-    if state.get("paused"):
+    if state.get("emergency_active") and state.get("emergency_piece", {}).get("paused"):
         return "paused"
+    if (not state.get("emergency_active")) and state.get("paused"):
+        return "paused"
+
+    now_ms = int(time.time() * 1000)
+
+    if state.get("emergency_active"):
+        emergency_piece = state.get("emergency_piece", {})
+        filename = emergency_piece.get("filename")
+        if filename:
+            start_ms = emergency_piece.get("started_at_ms") or now_ms
+            duration_ms = elapsed_from_timing(
+                emergency_piece.get("started_at_ms"),
+                bool(emergency_piece.get("paused", False)),
+                emergency_piece.get("paused_at_ms"),
+                emergency_piece.get("paused_total_ms", 0),
+                now_ms,
+            )
+            state["piece_history"].append(
+                {
+                    "process": "Emergencia",
+                    "piece_name": Path(filename).stem,
+                    "filename": filename,
+                    "piece_type": "emergency",
+                    "started_at_ms": start_ms,
+                    "ended_at_ms": now_ms,
+                    "duration_ms": duration_ms,
+                }
+            )
+
+        suspended_stack = state.get("suspended_stack", [])
+        state["emergency_active"] = False
+        state["emergency_piece"] = {}
+
+        if suspended_stack:
+            previous = suspended_stack.pop()
+            if previous.get("kind") == "emergency":
+                state["emergency_active"] = True
+                state["emergency_piece"] = dict(previous.get("piece", {}))
+                return "emergency-resumed"
+
+            state["index"] = int(previous.get("index", state.get("index", 0)))
+            state["piece_started_at_ms"] = previous.get("piece_started_at_ms")
+            state["paused"] = bool(previous.get("paused", False))
+            state["paused_at_ms"] = previous.get("paused_at_ms")
+            state["paused_total_ms"] = int(previous.get("paused_total_ms", 0))
+
+            return "emergency-finished"
+
+        return "emergency-finished"
 
     files = normalize_queue_entries(state.get("queue", []))
     state["queue"] = files
-    now_ms = int(time.time() * 1000)
     current_index = int(state.get("index", 0))
 
     if current_index < len(files):
@@ -499,6 +693,7 @@ def advance_screen_production(slot_id):
                 "process": "Tela",
                 "piece_name": Path(current_filename).stem,
                 "filename": current_filename,
+                "piece_type": "regular",
                 "started_at_ms": start_ms,
                 "ended_at_ms": now_ms,
                 "duration_ms": duration_ms,
@@ -925,6 +1120,7 @@ def update_screen_pdfs(slot_id):
     responsible_name = request.form.get("responsible", metadata.get("responsible", ""))
     operation_type = request.form.get("operation_type", metadata.get("operation_type", ""))
     equipment_machine = request.form.get("equipment_machine", metadata.get("equipment_machine", ""))
+    emergency_filename = request.form.get("emergency_filename", metadata.get("emergency_filename", ""))
 
     incoming_quantities = {}
     incoming_quantities_raw = request.form.get("piece_quantities", "")
@@ -980,6 +1176,9 @@ def update_screen_pdfs(slot_id):
         if filename in current_files_set
     }
 
+    if str(emergency_filename or "") not in current_files_set:
+        emergency_filename = ""
+
     # Build final order: use incoming_order as base, append new files at end, drop removed
     removed_set = set(removed_files)
     # Map old names to saved names for newly added files — added_files are already final names
@@ -991,7 +1190,35 @@ def update_screen_pdfs(slot_id):
     else:
         pdf_order = []
 
-    write_screen_metadata(slot_id, responsible_name, operation_type, piece_quantities, pdf_order, equipment_machine)
+    write_screen_metadata(
+        slot_id,
+        responsible_name,
+        operation_type,
+        piece_quantities,
+        pdf_order,
+        equipment_machine,
+        emergency_filename,
+    )
+
+    # Se houver producao ativa, aplica a peca marcada como emergencia imediatamente.
+    state = ensure_screen_runtime(slot_id)
+    if emergency_filename and state.get("active"):
+        current = current_screen_piece(slot_id)
+        already_current_emergency = bool(
+            current and current.get("emergency") and current.get("filename") == emergency_filename
+        )
+
+        if not already_current_emergency:
+            _, emergency_status = start_screen_emergency(slot_id, emergency_filename)
+            if emergency_status == "emergency-started":
+                publish_production_event(
+                    "production-updated",
+                    {
+                        "screenId": slot_id,
+                        "result": "emergency-started",
+                        "timestamp": int(time.time() * 1000),
+                    },
+                )
 
     return jsonify(screen_snapshot(slot_id))
 
@@ -1030,6 +1257,11 @@ def confirm_screen(slot_id):
     if status == "already-active":
         return jsonify({"error": "Esta tela ja esta em producao."}), 409
 
+    metadata = read_screen_metadata(slot_id)
+    configured_emergency = metadata.get("emergency_filename", "")
+    if configured_emergency:
+        start_screen_emergency(slot_id, configured_emergency)
+
     publish_production_event(
         "production-updated",
         {
@@ -1066,6 +1298,36 @@ def finish_screen_piece(slot_id):
     )
 
 
+@app.route("/api/telas/<int:slot_id>/emergencia", methods=["POST"])
+def start_emergency_piece(slot_id):
+    if not valid_screen_slot(slot_id):
+        return jsonify({"error": "Tela nao encontrada."}), 404
+
+    payload = request.get_json(silent=True) or {}
+    filename = payload.get("filename", "")
+
+    _, status = start_screen_emergency(slot_id, filename)
+    if status == "not-active":
+        return jsonify({"error": "A peca de emergencia so pode ser iniciada com producao ativa."}), 400
+    if status == "invalid-file":
+        return jsonify({"error": "Arquivo de emergencia invalido."}), 400
+    if status == "missing-file":
+        return jsonify({"error": "Arquivo de emergencia nao encontrado na fila desta tela."}), 404
+    if status == "no-current":
+        return jsonify({"error": "Nao existe peca atual para interromper."}), 409
+
+    publish_production_event(
+        "production-updated",
+        {
+            "screenId": slot_id,
+            "result": "emergency-started",
+            "timestamp": int(time.time() * 1000),
+        },
+    )
+
+    return jsonify({"result": status, "screen": screen_snapshot(slot_id)})
+
+
 @app.route("/api/telas/<int:slot_id>/pausa", methods=["POST"])
 def toggle_screen_pause(slot_id):
     if not valid_screen_slot(slot_id):
@@ -1076,7 +1338,19 @@ def toggle_screen_pause(slot_id):
         return jsonify({"error": "Nao ha producao ativa para pausar."}), 400
 
     now_ms = int(time.time() * 1000)
-    if state.get("paused"):
+    if state.get("emergency_active"):
+        emergency_piece = state.setdefault("emergency_piece", {})
+        if emergency_piece.get("paused"):
+            paused_at = int(emergency_piece.get("paused_at_ms") or now_ms)
+            emergency_piece["paused_total_ms"] = int(emergency_piece.get("paused_total_ms", 0)) + max(0, now_ms - paused_at)
+            emergency_piece["paused"] = False
+            emergency_piece["paused_at_ms"] = None
+            result = "resumed"
+        else:
+            emergency_piece["paused"] = True
+            emergency_piece["paused_at_ms"] = now_ms
+            result = "paused"
+    elif state.get("paused"):
         paused_at = int(state.get("paused_at_ms") or now_ms)
         state["paused_total_ms"] = int(state.get("paused_total_ms", 0)) + max(0, now_ms - paused_at)
         state["paused"] = False

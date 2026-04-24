@@ -49,7 +49,14 @@ function populateDrawer() {
   const pieces = screen.piece_statuses || [];
 
   const rows = pieces.map((p) => {
-    const statusLabel = { done: "Concluido", current: "Em andamento", pending: "Pendente", waiting_confirmation: "Aguardando" }[p.status] || p.status;
+    const statusLabel = {
+      done: "Concluido",
+      current: "Em andamento",
+      emergency: "Emergencia",
+      paused_for_emergency: "Pausado",
+      pending: "Pendente",
+      waiting_confirmation: "Aguardando",
+    }[p.status] || p.status;
     const name = (p.filename || "").replace(/\.pdf$/i, "");
     return `
       <div class="drawer_PieceRow drawer_PieceRow--${p.status}">
@@ -71,6 +78,7 @@ function populateDrawer() {
     </div>
   `;
 }
+
 
 if (drawerBtn) drawerBtn.addEventListener("click", openDrawer);
 if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", closeDrawer);
@@ -193,13 +201,14 @@ function renderActiveState(screen) {
   const current = screen.current;
   const pieceTitle = (current.piece_name || current.filename || "Peca").replace(/\.pdf$/i, "");
   const elapsedMs = Number(current.elapsed_ms || 0);
+  const isEmergency = Boolean(current.emergency);
 
   if (current.paused) {
     container.innerHTML = `
       <div class="producao_Header">
         <h1>${screen.responsible || "Responsavel nao informado"}</h1>
         <div class="producao_Meta">
-          <p>Peca em andamento: <strong>${pieceTitle}</strong></p>
+          <p>Peca em andamento: <strong>${pieceTitle}</strong> ${isEmergency ? '<span class="emergency_Tag">EMERGENCIA</span>' : ""}</p>
           <p>Tempo atual: <strong id="current-elapsed-display">${formatDuration(elapsedMs)}</strong></p>
           <p>Paginacao: <strong>${current.index + 1} de ${current.total}</strong></p>
         </div>
@@ -229,7 +238,7 @@ function renderActiveState(screen) {
 
   container.innerHTML = `
     <div class="producao_Header">
-      <h1>${pieceTitle}</h1>
+      <h1>${pieceTitle} ${isEmergency ? '<span class="emergency_Tag">EMERGENCIA</span>' : ""}</h1>
       <div class="producao_Meta">
         <p>Tempo atual: <strong id="current-elapsed-display">${formatDuration(elapsedMs)}</strong></p>
         <p>Quantidade: <strong>${current.quantity || 1}</strong></p>
